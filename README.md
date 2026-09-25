@@ -67,8 +67,8 @@ Gizli değerler depoya ve belgelere yazılmaz. Vercel'deki gizli değerler sonra
 
 - Site şimdilik yalnızca **demoyu** tanıtır; lisans satışı siteden yapılmaz. Demodan sonra devam etmek isteyenler
   telefon (0532 605 05 87) veya e-postayla (bilgi.ugurcetin@gmail.com) iletişime geçer.
-- `web/kvkk.html` KVKK aydınlatma metnidir. Veri sorumlusunun ad-soyad/unvan ve adresi eklenmek istenirse
-  "1. Veri sorumlusu" bölümüne yazılır.
+- `web/kvkk.html` KVKK aydınlatma metnidir. Veri sorumlusu: Uğur Çetin, Karatay / Konya / Türkiye (alan adı ve
+  açık adres belli olunca "1. Veri sorumlusu" bölümünde güncellenir).
 
 ## İndirme bağlantısı
 
