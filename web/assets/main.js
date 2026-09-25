@@ -41,6 +41,14 @@
     timer = setTimeout(() => toast.classList.remove("show"), 3200);
   }));
 
+  // Demo indirilince kullanım kılavuzu da yeni sekmede açılır.
+  document.getElementById("demoDownload")?.addEventListener("click", () => {
+    const guide = document.getElementById("guideDownload");
+    if (guide) window.open(guide.href, "_blank", "noopener");
+    const next = document.getElementById("downloadNext");
+    if (next) next.hidden = false;
+  });
+
   // Görünür olunca yumuşak giriş
   const items = document.querySelectorAll(".card, .section-head, .statement h2, .numbers > div, .download, .trust-list li");
   if ("IntersectionObserver" in window && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
