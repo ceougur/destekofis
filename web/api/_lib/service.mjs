@@ -30,6 +30,10 @@ export async function handleLicenseRequest(request, fn) {
   } else {
     if (typeof body.licenseId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$/.test(body.licenseId)) return reject("BAD_REQUEST", "Geçersiz istek.", 400);
     payload.licenseId = body.licenseId;
+    // Denemenin 3. gününde program firma ve iletişim bilgisini bu istekle gönderir.
+    if (body.office && typeof body.office === "object") {
+      payload.office = { name: text(body.office.name, 120), contact: text(body.office.contact, 120), email: text(body.office.email, 160), phone: text(body.office.phone, 40) };
+    }
   }
   try {
     const { apiSecret, keyId } = settings();

@@ -413,6 +413,19 @@ begin
   where machine = m
   returning * into inst;
 
+  -- Denemenin 3. gününde program firma ve iletişim bilgisini doğrulama isteğiyle gönderir.
+  if inst.machine is not null and jsonb_typeof(p_body -> 'office') = 'object' and lisans.txt(p_body -> 'office', 'name', 120) <> '' then
+    update lisans.installations set
+      office_name = lisans.txt(p_body -> 'office', 'name', 120),
+      contact = coalesce(nullif(lisans.txt(p_body -> 'office', 'contact', 120), ''), contact),
+      email = coalesce(nullif(lisans.txt(p_body -> 'office', 'email', 160), ''), email),
+      phone = coalesce(nullif(lisans.txt(p_body -> 'office', 'phone', 40), ''), phone)
+    where machine = m
+    returning * into inst;
+    perform lisans.log('installation.contact', 'servis', m, lid, p_ip, jsonb_build_object(
+      'office', inst.office_name, 'contact', inst.contact, 'email', inst.email, 'phone', inst.phone));
+  end if;
+
   select * into lic from lisans.best_license(m, lid);
   if lic.id is not null then
     if inst.machine is null then

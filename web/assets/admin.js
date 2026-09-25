@@ -111,6 +111,7 @@
     "license.code_issued": "İnternetsiz etkinleştirme kodu üretildi",
     "license.stop_sent": "Taşınan lisansın eski bilgisayarı durduruldu",
     "check.unknown": "Tanınmayan lisansla doğrulama denendi",
+    "installation.contact": "Firma bilgilerini bıraktı (denemenin 3. günü)",
     "installation.updated": "Ofis bilgileri düzenlendi",
     "installation.forgotten": "Kişisel bilgiler silindi (KVKK)",
     "operator.login": "Operatör giriş yaptı",
@@ -125,7 +126,7 @@
   function eventDetail(event) {
     const detail = event.detail || {};
     const parts = [];
-    if (event.type === "trial.started") {
+    if (event.type === "trial.started" || event.type === "installation.contact") {
       if (detail.contact) parts.push(detail.contact);
       if (detail.phone) parts.push(detail.phone);
     }
