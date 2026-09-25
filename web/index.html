@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Destek Ofis — Verinizi yükleyin, ofisiniz hazır</title>
+  <meta name="description" content="Destek Ofis: Excel ve Google Sheets tablolarınızı yükleyin, sistem verinize göre kendini kursun. Kayıt tutan her sektör için ortak ofis yönetim sistemi. Ücretsiz demoyu indirin.">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <!-- ÜST MENÜ -->
+  <header class="nav" id="top">
+    <div class="container nav-inner">
+      <a href="#top" class="brand" aria-label="Destek Ofis ana sayfa">
+        <img src="assets/favicon.svg" alt="" width="32" height="32">
+        <span>Destek Ofis</span>
+      </a>
+      <nav class="nav-links" id="navLinks" aria-label="Ana menü">
+        <a href="#nasil">Nasıl çalışır</a>
+        <a href="#ozellikler">Özellikler</a>
+        <a href="#sektorler">Sektörler</a>
+        <a href="#lisans">Lisans</a>
+        <a href="#sss">SSS</a>
+      </nav>
+      <div class="nav-actions">
+        <button class="icon-btn" id="themeToggle" aria-label="Tema değiştir" title="Tema değiştir">
+          <svg class="i-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg class="i-moon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+        <a href="#indir" class="btn btn-primary btn-sm">Demoyu indir</a>
+        <button class="icon-btn menu-btn" id="menuBtn" aria-label="Menüyü aç" aria-expanded="false" aria-controls="navLinks">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO -->
+    <section class="hero">
+      <div class="container hero-inner">
+        <a href="#sektorler" class="chip"><span class="dot"></span> Kayıt tutan her sektör için</a>
+        <h1>Verinizi yükleyin.<br><span class="grad">Ofisiniz hazır.</span></h1>
+        <p class="lead">Destek Ofis, Excel ve Google Sheets tablolarınızı okur, sütunlarınızı tanır ve kendini verinize göre kurar. Ekibiniz aynı gün, aynı ekranda çalışmaya başlar.</p>
+        <div class="cta-row">
+          <a href="#indir" class="btn btn-primary btn-lg">Ücretsiz demoyu indir</a>
+          <a href="#lisans" class="btn btn-ghost btn-lg">Lisans seçenekleri</a>
+        </div>
+        <ul class="hero-points">
+          <li><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg> Şablon gerekmez</li>
+          <li><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg> Kaynak tablonuz değişmez</li>
+          <li><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg> Verileriniz ofisinizde kalır</li>
+        </ul>
+
+        <!-- ÜRÜN GÖRSELİ (HTML ile çizilmiş temsili ekran) -->
+        <div class="mock" role="img" aria-label="Destek Ofis ana ekranının temsili görünümü: kategori sekmeleri, özet kartları ve seçili satırı vurgulanmış kayıt tablosu">
+          <div class="mock-bar">
+            <span></span><span></span><span></span>
+            <div class="mock-url">http://ofis-server:5123</div>
+          </div>
+          <div class="mock-body">
+            <div class="mock-top">
+              <div class="mock-search">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+                Müşteri, numara veya telefon ara…
+              </div>
+              <div class="mock-user">UÇ</div>
+            </div>
+            <div class="mock-tabs">
+              <span class="on">Tümü <b>1.248</b></span>
+              <span>Muhasebe <b>412</b></span>
+              <span>Emlak <b>286</b></span>
+              <span>Sigorta <b>331</b></span>
+              <span class="hide-sm">Satış <b>219</b></span>
+            </div>
+            <div class="mock-stats">
+              <div><small>Toplam kayıt</small><strong>1.248</strong><em class="up">+36 bu hafta</em></div>
+              <div><small>Bu ay tahsilat</small><strong>₺ 482.150</strong><em class="up">+12%</em></div>
+              <div class="hide-sm"><small>Açık görev</small><strong>27</strong><em>9'u bugün</em></div>
+              <div class="hide-sm"><small>Ödeme sözü</small><strong>14</strong><em class="warn">3'ü gecikmede</em></div>
+            </div>
+            <div class="mock-table">
+              <div class="tr th"><span>Kayıt</span><span>Müşteri</span><span class="hide-sm">Kategori</span><span>Tutar</span><span>Durum</span></div>
+              <div class="tr"><span>2026/1042</span><span>Aydın Yapı Ltd.</span><span class="hide-sm">Muhasebe</span><span>₺ 18.400</span><span><i class="pill ok">Ödendi</i></span></div>
+              <div class="tr sel"><span>2026/1043</span><span>Kaya Emlak</span><span class="hide-sm">Emlak</span><span>₺ 32.000</span><span><i class="pill info">Devam ediyor</i></span></div>
+              <div class="tr"><span>2026/1044</span><span>Demir Sigorta</span><span class="hide-sm">Sigorta</span><span>₺ 7.950</span><span><i class="pill warn">Söz verildi</i></span></div>
+              <div class="tr"><span>2026/1045</span><span>Yıldız Market</span><span class="hide-sm">Satış</span><span>₺ 12.300</span><span><i class="pill info">Devam ediyor</i></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEKTÖR ŞERİDİ -->
+    <section class="strip" aria-label="Uygun sektörler">
+      <div class="container">
+        <p>Tek program, her sektörün tablosu</p>
+        <div class="marquee"><div class="marquee-track">
+          <span>Hukuk ve icra</span><span>Muhasebe</span><span>Emlak</span><span>Sigorta</span><span>Satış ve bayi</span><span>İnsan kaynakları</span><span>Servis ve bakım</span><span>Tahsilat ofisleri</span>
+          <span aria-hidden="true">Hukuk ve icra</span><span aria-hidden="true">Muhasebe</span><span aria-hidden="true">Emlak</span><span aria-hidden="true">Sigorta</span><span aria-hidden="true">Satış ve bayi</span><span aria-hidden="true">İnsan kaynakları</span><span aria-hidden="true">Servis ve bakım</span><span aria-hidden="true">Tahsilat ofisleri</span>
+        </div></div>
+      </div>
+    </section>
+
+    <!-- BÜYÜK MANŞET -->
+    <section class="statement">
+      <div class="container">
+        <p class="eyebrow">Neden Destek Ofis?</p>
+        <h2>Dağınık tablolar, farklı bilgisayarlar, kaybolan notlar.<br><span class="muted">Hepsi tek merkezde bitiyor.</span></h2>
+      </div>
+    </section>
+
+    <!-- NASIL ÇALIŞIR -->
+    <section class="section" id="nasil">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Nasıl çalışır</p>
+          <h2>Üç adımda kurulur, kendini verinize göre ayarlar</h2>
+        </div>
+        <div class="steps">
+          <article class="card step">
+            <span class="step-no">01</span>
+            <h3>Yükle</h3>
+            <p>Excel, CSV dosyanızı seçin ya da Google Sheets bağlantınızı yapıştırın. Hazırlık ya da şablon gerekmez.</p>
+          </article>
+          <article class="card step">
+            <span class="step-no">02</span>
+            <h3>Tanır</h3>
+            <p>Sütun başlıklarınızı okur; tutar, tarih ve sayı alanlarını kendisi ayırt eder. Her sekme ayrı bir kategori olur.</p>
+          </article>
+          <article class="card step step-accent">
+            <span class="step-no">03</span>
+            <h3>Kullan</h3>
+            <p>Arama, kayıt tablosu, detay paneli ve özet kartları kendi alanlarınızla hazır gelir. Ekip hemen başlar.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ÖZELLİKLER -->
+    <section class="section" id="ozellikler">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Özellikler</p>
+          <h2>Günlük işin tamamı, tek ekranda</h2>
+          <p class="sub">Her not, ödeme ve görev ilgili kaydın altında saklanır. Kim, ne zaman, ne yaptı; hepsi görünür.</p>
+        </div>
+        <div class="bento">
+          <article class="card">
+            <div class="ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></div>
+            <h3>Tek kutudan arama</h3>
+            <p>Numara, isim, müşteri ya da telefon. Tablonuzdaki her alanda saniyeler içinde bulur.</p>
+          </article>
+          <article class="card">
+            <div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M8 15h3"/></svg></div>
+            <h3>Tahsilat</h3>
+            <p>Ödemeler tarihli kaydedilir, personele işlenir.</p>
+          </article>
+          <article class="card">
+            <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l7 4v5c0 4.5-3 8-7 9-4-1-7-4.5-7-9V7z"/><path d="M9 12l2 2 4-4"/></svg></div>
+            <h3>Ödeme sözü</h3>
+            <p>Verilen taahhüt izlenir, ödenince kapanır.</p>
+          </article>
+          <article class="card">
+            <div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></div>
+            <h3>Süreli kayıtlar</h3>
+            <p>Vade, sözleşme, yenileme ve takip tarihleri takvimde.</p>
+          </article>
+          <article class="card">
+            <div class="ico"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg></div>
+            <h3>Görev</h3>
+            <p>Kayıt bazında iş atayın, kimde olduğunu görün.</p>
+          </article>
+          <article class="card">
+            <div class="ico"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+            <h3>Not, telefon, WhatsApp</h3>
+            <p>Görüşmeler kayda işlenir, tek tıkla mesaj.</p>
+          </article>
+          <article class="card b-wide b-dark">
+            <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z"/></svg></div>
+            <h3>Yapay zekâ destekli sütun eşleme</h3>
+            <p>Farklı başlıklarla hazırlanmış tablolar bile doğru alanlara eşlenir. Verileriniz değişmez, sadece anlamlandırılır.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEKTÖRLER -->
+    <section class="section" id="sektorler">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Sektörler</p>
+          <h2>Kayıt tutuyorsanız, Destek Ofis size göre</h2>
+          <p class="sub">Ayrı sürüm yok, ayrı kurulum yok. Aynı program, hangi tabloyu yüklerseniz onun sütunlarıyla çalışır.</p>
+        </div>
+        <div class="sectors">
+          <article class="card sector"><h3>Hukuk ve icra</h3><div class="tags"><i>Dosya no</i><i>Borçlu</i><i>İcra dairesi</i><i>Tahsilat</i></div></article>
+          <article class="card sector"><h3>Muhasebe</h3><div class="tags"><i>Müşteri</i><i>Fatura</i><i>Vade</i><i>Bakiye</i></div></article>
+          <article class="card sector"><h3>Emlak</h3><div class="tags"><i>Portföy</i><i>Kiracı</i><i>Kira bedeli</i><i>Sözleşme</i></div></article>
+          <article class="card sector"><h3>Sigorta</h3><div class="tags"><i>Poliçe</i><i>Sigortalı</i><i>Prim</i><i>Yenileme</i></div></article>
+          <article class="card sector"><h3>Satış ve bayi</h3><div class="tags"><i>Ürün</i><i>Müşteri</i><i>Sipariş</i><i>Ödeme sözü</i></div></article>
+          <article class="card sector"><h3>İnsan kaynakları</h3><div class="tags"><i>Personel</i><i>Departman</i><i>Maaş</i><i>İzin</i></div></article>
+        </div>
+      </div>
+    </section>
+
+    <!-- GÜVEN -->
+    <section class="section trust">
+      <div class="container trust-inner">
+        <div class="trust-copy">
+          <p class="eyebrow">Güvenlik ve süreklilik</p>
+          <h2>Verileriniz ofisinizde.<br>Kaybolmaz, üzerine yazılmaz.</h2>
+          <p class="sub">Destek Ofis bulutta değil, kendi ofis ağınızda çalışır. Bir bilgisayar sunucu olur, diğerleri tarayıcıdan bağlanır.</p>
+        </div>
+        <ul class="trust-list">
+          <li><b>Değişiklik geçmişi</b><span>Her işlemin kim, ne zaman, ne yaptığı kayıtlı.</span></li>
+          <li><b>Çakışma koruması</b><span>İki kişi aynı alanı değiştirirse sessizce ezilmez, uyarı çıkar.</span></li>
+          <li><b>Otomatik yedek</b><span>Altı saatte bir yedek; son 30 yedek saklanır.</span></li>
+          <li><b>Kullanıcı ve roller</b><span>Herkes kendi hesabıyla girer; şifreler güvenli biçimde saklanır.</span></li>
+          <li><b>Kaynak dosyanıza dokunulmaz</b><span>Düzeltmeler ayrı katmanda tutulur; Excel ve Sheets olduğu gibi kalır.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- RAKAMLAR / MANŞET ŞERİDİ -->
+    <section class="section">
+      <div class="container numbers">
+        <div><strong>1</strong><span>server bilgisayar yeter</span></div>
+        <div><strong>0</strong><span>istemci kurulumu, sadece tarayıcı</span></div>
+        <div><strong>3</strong><span>adımda kullanıma hazır</span></div>
+        <div><strong>∞</strong><span>sektör, aynı program</span></div>
+      </div>
+    </section>
+
+    <!-- LİSANS -->
+    <section class="section" id="lisans">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Lisans</p>
+          <h2>Önce deneyin, sonra lisanslayın</h2>
+          <p class="sub">Demo sürümle kendi tablonuzu yükleyip programı ofisinizde görün. Karar verdiğinizde lisanslı sürüme geçin.</p>
+        </div>
+        <div class="plans">
+          <article class="card plan">
+            <h3>Demo</h3>
+            <p class="price">Ücretsiz</p>
+            <p class="plan-sub">Programı kendi verinizle tanıyın.</p>
+            <ul>
+              <li>Excel, CSV ve Google Sheets yükleme</li>
+              <li>Arama, sekmeler ve detay paneli</li>
+              <li>Not, tahsilat ve görev işlemleri</li>
+              <li>[Demo süresi / kayıt sınırı]</li>
+            </ul>
+            <a href="#indir" class="btn btn-ghost btn-block">Demoyu indir</a>
+          </article>
+          <article class="card plan plan-pro">
+            <span class="badge">Önerilen</span>
+            <h3>Ofis Lisansı</h3>
+            <p class="price">[₺ ____ ]<small> / [dönem]</small></p>
+            <p class="plan-sub">Tüm ofisiniz için tam sürüm.</p>
+            <ul>
+              <li>Tüm demo özellikleri, sınırsız kayıt</li>
+              <li>Çok kullanıcılı server/client kurulum</li>
+              <li>Rol ve kullanıcı yönetimi</li>
+              <li>Otomatik yedekleme ve değişiklik geçmişi</li>
+              <li>Güncellemeler ve destek</li>
+            </ul>
+            <a href="#indir" class="btn btn-primary btn-block">Lisanslı sürümü indir</a>
+          </article>
+          <article class="card plan">
+            <h3>Kurumsal</h3>
+            <p class="price">Teklif alın</p>
+            <p class="plan-sub">Birden çok şube ve özel ihtiyaçlar.</p>
+            <ul>
+              <li>Ofis lisansındaki her şey</li>
+              <li>Kurulum ve veri aktarım desteği</li>
+              <li>Sektörünüze özel uyarlama</li>
+              <li>Öncelikli destek</li>
+            </ul>
+            <a href="#iletisim" class="btn btn-ghost btn-block">İletişime geçin</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- İNDİR -->
+    <section class="section" id="indir">
+      <div class="container">
+        <div class="download">
+          <div>
+            <p class="eyebrow light">İndir</p>
+            <h2>Ofisinizi bugün tek merkezde toplayın</h2>
+            <p>Windows sunucu bilgisayarına kurulur; ofisteki diğer bilgisayarlar Chrome veya Edge ile bağlanır.</p>
+            <ul class="reqs">
+              <li>Sunucu: Windows bilgisayar, Node.js 22 veya üzeri</li>
+              <li>İstemci: Chrome veya Edge, kurulum gerekmez</li>
+              <li>Aynı ofis ağında çalışır</li>
+            </ul>
+          </div>
+          <div class="download-actions">
+            <a href="#" class="btn btn-white btn-lg" data-soon="demo">
+              <svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+              Demo sürümü indir
+            </a>
+            <a href="#" class="btn btn-outline-white btn-lg" data-soon="lisans">
+              <svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+              Lisanslı sürümü indir
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SSS -->
+    <section class="section" id="sss">
+      <div class="container narrow">
+        <div class="section-head center">
+          <p class="eyebrow">Sık sorulan sorular</p>
+          <h2>Aklınıza takılanlar</h2>
+        </div>
+        <div class="faq">
+          <details>
+            <summary>Tablomu özel bir şablona göre hazırlamam gerekiyor mu?</summary>
+            <p>Hayır. Destek Ofis sütun başlıklarınızı olduğu gibi okur ve tutar, tarih gibi alan türlerini kendisi belirler. Farklı başlıklı tablolar için yapay zekâ destekli eşleme de vardır.</p>
+          </details>
+          <details>
+            <summary>Excel veya Google Sheets dosyam değişir mi?</summary>
+            <p>Hayır. Kaynak dosyanıza dokunulmaz. Programda yaptığınız düzeltmeler, notlar ve işlemler merkezi veritabanında ayrı bir katman olarak saklanır.</p>
+          </details>
+          <details>
+            <summary>Verilerim internete ya da buluta gidiyor mu?</summary>
+            <p>Hayır. Program kendi ofis ağınızdaki bir sunucu bilgisayarda çalışır. Google Sheets kullanırsanız yalnızca o tabloyu okumak için bağlantı kurulur.</p>
+          </details>
+          <details>
+            <summary>Her bilgisayara kurulum yapmak gerekiyor mu?</summary>
+            <p>Hayır. Kurulum yalnızca sunucu olarak seçtiğiniz bilgisayara yapılır. Diğer bilgisayarlar tarayıcıdan sunucu adresine girerek bağlanır.</p>
+          </details>
+          <details>
+            <summary>Demodan lisanslı sürüme geçince verilerim kaybolur mu?</summary>
+            <p>[Demo verilerinin lisanslı sürüme aktarımı hakkında bilgi eklenecek.]</p>
+          </details>
+          <details>
+            <summary>Hangi sektörler kullanabilir?</summary>
+            <p>Kayıt tutan her sektör: hukuk ve icra, muhasebe, emlak, sigorta, satış, insan kaynakları, servis ve daha fazlası. Program tek; yüklediğiniz tabloya göre şekillenir.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- SON MANŞET -->
+    <section class="section final" id="iletisim">
+      <div class="container center">
+        <h2>Tablolarınız zaten hazır.<br><span class="grad">Ofisiniz de hazır olsun.</span></h2>
+        <div class="cta-row center">
+          <a href="#indir" class="btn btn-primary btn-lg">Ücretsiz demoyu indir</a>
+          <a href="mailto:[iletisim@alanadiniz.com]" class="btn btn-ghost btn-lg">Bize yazın</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <a href="#top" class="brand"><img src="assets/favicon.svg" alt="" width="26" height="26"><span>Destek Ofis</span></a>
+      <p>© <span id="year">2026</span> Destek Ofis. Tüm hakları saklıdır.</p>
+      <nav aria-label="Alt menü"><a href="#lisans">Lisans</a><a href="#sss">SSS</a><a href="#iletisim">İletişim</a></nav>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="assets/main.js"></script>
+</body>
+</html>
