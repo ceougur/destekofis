@@ -60,12 +60,12 @@
         </div>
         <ul class="hero-points">
           <li><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg> Şablon gerekmez</li>
-          <li><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg> Kaynak tablonuz değişmez</li>
+          <li><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg> Tek dosyayla kurulum</li>
           <li><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg> Verileriniz ofisinizde kalır</li>
         </ul>
 
         <!-- ÜRÜN GÖRSELİ (HTML ile çizilmiş temsili ekran) -->
-        <div class="mock" role="img" aria-label="Destek Ofis ana ekranının temsili görünümü: kategori sekmeleri, özet kartları ve seçili satırı vurgulanmış kayıt tablosu">
+        <div class="mock" role="img" aria-label="Destek Ofis ana ekranının temsili görünümü: tablo sekmeleri, özet kartları ve seçili satırı vurgulanmış kayıt tablosu">
           <div class="mock-bar">
             <span></span><span></span><span></span>
             <div class="mock-url">http://ofis-server:5123</div>
@@ -79,24 +79,23 @@
               <div class="mock-user">UÇ</div>
             </div>
             <div class="mock-tabs">
-              <span class="on">Tümü <b>1.248</b></span>
-              <span>Muhasebe <b>412</b></span>
+              <span class="on">Muhasebe <b>412</b></span>
               <span>Emlak <b>286</b></span>
               <span>Sigorta <b>331</b></span>
-              <span class="hide-sm">Satış <b>219</b></span>
+              <span>Satış <b>219</b></span>
             </div>
             <div class="mock-stats">
-              <div><small>Toplam kayıt</small><strong>1.248</strong><em class="up">+36 bu hafta</em></div>
+              <div><small>Toplam kayıt</small><strong>412</strong><em class="up">+36 bu hafta</em></div>
               <div><small>Bu ay tahsilat</small><strong>₺ 482.150</strong><em class="up">+%12</em></div>
               <div class="hide-sm"><small>Açık görev</small><strong>27</strong><em>9'u bugün</em></div>
               <div class="hide-sm"><small>Ödeme sözü</small><strong>14</strong><em class="warn">3'ü gecikmede</em></div>
             </div>
             <div class="mock-table">
-              <div class="tr th"><span>Kayıt</span><span>Müşteri</span><span class="hide-sm">Kategori</span><span>Tutar</span><span>Durum</span></div>
-              <div class="tr"><span>2026/1042</span><span>Aydın Yapı Ltd.</span><span class="hide-sm">Muhasebe</span><span>₺ 18.400</span><span><i class="pill ok">Ödendi</i></span></div>
-              <div class="tr sel"><span>2026/1043</span><span>Kaya Emlak</span><span class="hide-sm">Emlak</span><span>₺ 32.000</span><span><i class="pill info">Devam ediyor</i></span></div>
-              <div class="tr"><span>2026/1044</span><span>Demir Sigorta</span><span class="hide-sm">Sigorta</span><span>₺ 7.950</span><span><i class="pill warn">Söz verildi</i></span></div>
-              <div class="tr"><span>2026/1045</span><span>Yıldız Market</span><span class="hide-sm">Satış</span><span>₺ 12.300</span><span><i class="pill info">Devam ediyor</i></span></div>
+              <div class="tr th"><span>Fatura</span><span>Müşteri</span><span class="hide-sm">Vade</span><span>Tutar</span><span>Durum</span></div>
+              <div class="tr"><span>2026/1042</span><span>Aydın Yapı Ltd.</span><span class="hide-sm">02.09.2026</span><span>₺ 18.400</span><span><i class="pill ok">Ödendi</i></span></div>
+              <div class="tr sel"><span>2026/1043</span><span>Kaya Emlak</span><span class="hide-sm">15.10.2026</span><span>₺ 32.000</span><span><i class="pill info">Devam ediyor</i></span></div>
+              <div class="tr"><span>2026/1044</span><span>Demir Sigorta</span><span class="hide-sm">30.09.2026</span><span>₺ 7.950</span><span><i class="pill warn">Söz verildi</i></span></div>
+              <div class="tr"><span>2026/1045</span><span>Yıldız Market</span><span class="hide-sm">20.10.2026</span><span>₺ 12.300</span><span><i class="pill info">Devam ediyor</i></span></div>
             </div>
           </div>
         </div>
@@ -138,12 +137,12 @@
           <article class="card step">
             <span class="step-no">02</span>
             <h3>Tanır</h3>
-            <p>Sütun başlıklarınızı okur; tutar, tarih ve sayı alanlarını kendisi ayırt eder. Her sekme ayrı bir kategori olur.</p>
+            <p>Sütunlarınızı okur, 142 sektör arasından size uygun olanı önerir. Siz onaylamadan hiçbir şey değişmez. Her sekme kendi kolonlarıyla çalışır.</p>
           </article>
           <article class="card step step-accent">
             <span class="step-no">03</span>
             <h3>Kullan</h3>
-            <p>Arama, kayıt tablosu, detay paneli ve özet kartları kendi alanlarınızla hazır gelir. Ekip hemen başlar.</p>
+            <p>Arama, kayıt tablosu, detay paneli ve doğrulanmış özet kartları kendi alanlarınızla hazır gelir. Ekip hemen başlar.</p>
           </article>
         </div>
       </div>
@@ -158,10 +157,15 @@
           <p class="sub">Her not, ödeme ve görev ilgili kaydın altında saklanır. Kim, ne zaman, ne yaptı; hepsi görünür.</p>
         </div>
         <div class="bento">
+          <article class="card b-wide b-dark">
+            <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z"/></svg></div>
+            <h3>Verinizi tanır</h3>
+            <p>Tablonuzu inceler; 142 sektör arasından uygun olanı, başlıkları, rol adlarını ve araçları önerir. Öneri siz onaylamadan uygulanmaz, analiz internete çıkmadan yapılır.</p>
+          </article>
           <article class="card">
             <div class="ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></div>
-            <h3>Tek kutudan arama</h3>
-            <p>Numara, isim, müşteri ya da telefon. Tablonuzdaki her alanda saniyeler içinde bulur.</p>
+            <h3>Tüm sekmelerde arama</h3>
+            <p>Numara, isim ya da telefon. Her sekmede kaç sonuç olduğu anında görünür.</p>
           </article>
           <article class="card">
             <div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M8 15h3"/></svg></div>
@@ -174,24 +178,34 @@
             <p>Verilen taahhüt izlenir, ödenince kapanır.</p>
           </article>
           <article class="card">
-            <div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></div>
-            <h3>Süreli kayıtlar</h3>
-            <p>Vade, sözleşme ve yenileme tarihleri takip edilir.</p>
-          </article>
-          <article class="card">
             <div class="ico"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg></div>
             <h3>Görev</h3>
             <p>Kayıt bazında iş atayın, kimde olduğunu görün.</p>
           </article>
           <article class="card">
+            <div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></div>
+            <h3>Süreli kayıtlar</h3>
+            <p>Vade, sözleşme ve yenileme tarihleri takip edilir.</p>
+          </article>
+          <article class="card">
             <div class="ico"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+            <h3>Ofis sohbeti</h3>
+            <p>Ofis kanalı ve özel yazışma; mesajdan ilgili kayda tek tıkla gidilir.</p>
+          </article>
+          <article class="card">
+            <div class="ico"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></div>
+            <h3>Anlık güncelleme</h3>
+            <p>Bir bilgisayarda eklenen not ya da tahsilat diğer ekranlara kendiliğinden yansır.</p>
+          </article>
+          <article class="card">
+            <div class="ico"><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg></div>
             <h3>Not, telefon, WhatsApp</h3>
             <p>Görüşmeler kayda işlenir, tek tıkla WhatsApp mesajı.</p>
           </article>
-          <article class="card b-wide b-dark">
-            <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z"/></svg></div>
-            <h3>Yapay zekâ destekli sütun eşleme</h3>
-            <p>Farklı başlıklarla hazırlanmış tablolar bile doğru alanlara eşlenir. Verileriniz değişmez, sadece anlamlandırılır.</p>
+          <article class="card b-wide">
+            <div class="ico"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 15v-4M12 15V8M16 15v-6"/></svg></div>
+            <h3>Doğrulanmış özet kartları</h3>
+            <p>Kartlar her hücre tek tek okunarak hesaplanır; sonuç kesin değilse kart gösterilmez. "Nasıl hesaplandı?" penceresi neyin neden sayıldığını açıklar.</p>
           </article>
         </div>
       </div>
@@ -203,7 +217,7 @@
         <div class="section-head">
           <p class="eyebrow">Sektörler</p>
           <h2>Kayıt tutuyorsanız, Destek Ofis size göre</h2>
-          <p class="sub">Ayrı sürüm yok, ayrı kurulum yok. Aynı program, hangi tabloyu yüklerseniz onun sütunlarıyla çalışır.</p>
+          <p class="sub">Ayrı sürüm yok, ayrı kurulum yok. Aynı program 142 sektörü tanır ve hangi tabloyu yüklerseniz onun sütunlarıyla çalışır.</p>
         </div>
         <div class="sectors">
           <article class="card sector"><h3>Hukuk ve icra</h3><div class="tags"><i>Dosya no</i><i>Borçlu</i><i>İcra dairesi</i><i>Tahsilat</i></div></article>
@@ -227,9 +241,10 @@
         <ul class="trust-list">
           <li><b>Değişiklik geçmişi</b><span>Her işlemi kimin, ne zaman yaptığı kayıt altındadır.</span></li>
           <li><b>Çakışma koruması</b><span>İki kişi aynı alanı değiştirirse biri diğerinin üzerine sessizce yazamaz, uyarı çıkar.</span></li>
-          <li><b>Otomatik yedek</b><span>Altı saatte bir yedek; son 30 yedek saklanır.</span></li>
+          <li><b>Otomatik yedek</b><span>Altı saatte bir ve her güncellemeden önce yedek; son 30 yedek saklanır.</span></li>
           <li><b>Kullanıcı ve roller</b><span>Herkes kendi hesabıyla girer; şifreler güvenli biçimde saklanır.</span></li>
           <li><b>Kaynak dosyanıza dokunulmaz</b><span>Düzeltmeler ayrı katmanda tutulur; Excel ve Sheets olduğu gibi kalır.</span></li>
+          <li><b>İmzalı otomatik güncelleme</b><span>Yeni sürüm arka planda doğrulanıp kurulur; sorun çıkarsa önceki sürüme döner.</span></li>
         </ul>
       </div>
     </section>
@@ -237,10 +252,10 @@
     <!-- RAKAMLAR / MANŞET ŞERİDİ -->
     <section class="section">
       <div class="container numbers">
-        <div><strong>1</strong><span>sunucu bilgisayar yeterli</span></div>
-        <div><strong>0</strong><span>istemci kurulumu: tarayıcı yeterli</span></div>
+        <div><strong>1</strong><span>kurulum dosyası, her şey dahil</span></div>
+        <div><strong>0</strong><span>ek program kurulumu</span></div>
         <div><strong>3</strong><span>adımda kullanıma hazır</span></div>
-        <div><strong>∞</strong><span>sektör, aynı program</span></div>
+        <div><strong>142</strong><span>sektörü tanır, aynı program</span></div>
       </div>
     </section>
 
@@ -275,7 +290,7 @@
               <li>Çok kullanıcılı sunucu–istemci kurulumu</li>
               <li>Rol ve kullanıcı yönetimi</li>
               <li>Otomatik yedekleme ve değişiklik geçmişi</li>
-              <li>Güncellemeler ve destek</li>
+              <li>Otomatik güncellemeler ve destek</li>
             </ul>
             <a href="#iletisim" class="btn btn-primary btn-block">Lisans satın al</a>
           </article>
@@ -302,11 +317,11 @@
           <div>
             <p class="eyebrow light">İndir</p>
             <h2>Ofisinizi bugün tek merkezde toplayın</h2>
-            <p>Windows sunucu bilgisayarına kurulur; ofisteki diğer bilgisayarlar Chrome veya Edge ile bağlanır.</p>
+            <p>Tek kurulum dosyasını sunucu olacak bilgisayarda çalıştırın, sihirbaz gerisini yapar. Aynı dosya personel bilgisayarlarına da kurulur.</p>
             <ul class="reqs">
-              <li>Sunucu: Windows bilgisayar, Node.js 22 veya üzeri</li>
-              <li>İstemci: Chrome veya Edge, kurulum gerekmez</li>
-              <li>Aynı ofis ağında çalışır</li>
+              <li>Windows bilgisayar; gereken her şey kurulumun içinde</li>
+              <li>Sunucu Windows servisi olarak, kimse oturum açmadan çalışır</li>
+              <li>Personel bilgisayarları sunucuyu ağda kendiliğinden bulur</li>
             </ul>
           </div>
           <div class="download-actions">
@@ -333,7 +348,7 @@
         <div class="faq">
           <details>
             <summary>Tablomu özel bir şablona göre hazırlamam gerekiyor mu?</summary>
-            <p>Hayır. Destek Ofis sütun başlıklarınızı olduğu gibi okur ve tutar, tarih gibi alan türlerini kendisi belirler. Farklı başlıklı tablolar için yapay zekâ destekli eşleme de vardır.</p>
+            <p>Hayır. Destek Ofis sütun başlıklarınızı olduğu gibi okur, sektörünüzü önerir ve tutar, tarih gibi alan türlerini kendisi belirler. Başlıkları sonradan kalemle değiştirebilirsiniz.</p>
           </details>
           <details>
             <summary>Excel veya Google Sheets dosyam değişir mi?</summary>
@@ -341,11 +356,15 @@
           </details>
           <details>
             <summary>Verilerim internete ya da buluta gidiyor mu?</summary>
-            <p>Verileriniz kendi ofis ağınızdaki sunucu bilgisayarda saklanır. Google Sheets bağlantısı ve yapay zekâ destekli eşleme gibi isteğe bağlı özellikler, yalnızca o işlem için internete bağlanır.</p>
+            <p>Hayır. Verileriniz ofisinizdeki sunucu bilgisayarda saklanır ve analiz internete çıkmadan yapılır. Sunucu yalnızca güncelleme denetimi ve (kullanırsanız) Google Sheets eşitlemesi için internete bağlanır.</p>
           </details>
           <details>
-            <summary>Her bilgisayara kurulum yapmak gerekiyor mu?</summary>
-            <p>Hayır. Kurulum yalnızca sunucu olarak seçtiğiniz bilgisayara yapılır. Diğer bilgisayarlar tarayıcıdan sunucu adresine girerek bağlanır.</p>
+            <summary>Kurulum nasıl yapılıyor, ayrıca bir program gerekiyor mu?</summary>
+            <p>Tek bir kurulum dosyası var ve gereken her şey içinde; ayrıca bir şey kurmanız gerekmez. Sunucu bilgisayarda "Sunucu", diğerlerinde "Personel bilgisayarı" seçilir. Personel bilgisayarları sunucuyu ağda kendiliğinden bulur; istenirse tarayıcıdan da bağlanılabilir.</p>
+          </details>
+          <details>
+            <summary>Güncellemeler nasıl geliyor?</summary>
+            <p>Kendiliğinden. Sunucu yeni sürümü arka planda indirir, imzasını doğrular, önce yedek alır ve yaklaşık bir dakikada geçer. Sorun çıkarsa önceki sürüme döner.</p>
           </details>
           <details>
             <summary>Demodan lisanslı sürüme geçince verilerim kaybolur mu?</summary>
