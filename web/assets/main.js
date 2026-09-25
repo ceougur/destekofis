@@ -30,14 +30,12 @@
   addEventListener("scroll", onScroll, { passive: true });
   onScroll();
 
-  // İndirme bağlantıları henüz hazır değil
+  // Demo indirme bağlantısı henüz hazır değil
   const toast = document.getElementById("toast");
   let timer;
   document.querySelectorAll("[data-soon]").forEach(el => el.addEventListener("click", e => {
     e.preventDefault();
-    toast.textContent = el.dataset.soon === "demo"
-      ? "Demo sürümü çok yakında burada olacak."
-      : "Lisanslı sürüm çok yakında burada olacak.";
+    toast.textContent = "Demo sürümü çok yakında burada olacak. Hemen denemek için bizi arayın: 0532 605 05 87";
     toast.classList.add("show");
     clearTimeout(timer);
     timer = setTimeout(() => toast.classList.remove("show"), 3200);

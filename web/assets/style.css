@@ -295,6 +295,37 @@ ul { margin: 0; padding: 0; list-style: none; }
 .plan-pro { border: 2px solid var(--primary); box-shadow: 0 20px 50px -24px color-mix(in srgb, var(--primary) 60%, transparent); }
 .badge { position: absolute; top: -13px; left: 32px; padding: 4px 12px; border-radius: 999px; background: var(--primary); color: var(--on-primary); font-size: 12px; font-weight: 700; }
 
+.demo-grid { display: grid; grid-template-columns: 1fr 1.25fr; gap: 20px; align-items: stretch; }
+.after { display: flex; flex-direction: column; gap: 20px; padding: 32px; }
+.after-steps { display: flex; flex-direction: column; gap: 16px; counter-reset: after; }
+.after-steps li { position: relative; padding-left: 44px; display: flex; flex-direction: column; gap: 2px; counter-increment: after; }
+.after-steps li::before {
+  content: counter(after); position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 10px;
+  display: grid; place-items: center; font-size: 14px; font-weight: 700; background: var(--primary-soft); color: var(--primary);
+}
+.after-steps b { font-size: 16px; }
+.after-steps span { color: var(--muted); font-size: 15px; }
+.contact-lines { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: auto; }
+.contact-line {
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--surface-2); font-weight: 600; font-size: 15px; min-width: 0;
+  transition: border-color .2s, background .2s;
+}
+.contact-line:hover { border-color: var(--primary); background: var(--primary-soft); }
+.contact-line svg { flex: none; width: 20px; height: 20px; fill: none; stroke: var(--primary); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.contact-line span { display: flex; flex-direction: column; min-width: 0; overflow-wrap: break-word; }
+.contact-line small { font-size: 12px; font-weight: 500; color: var(--faint); }
+
+.contact-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 340px)); justify-content: center; gap: 16px; margin-top: 36px; }
+.contact-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 28px 20px; text-align: center; }
+.contact-card .ico { margin-bottom: 10px; }
+.contact-card small { font-size: 13px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; }
+.contact-card strong { font-size: clamp(17px, 2vw, 20px); letter-spacing: -0.01em; overflow-wrap: break-word; max-width: 100%; }
+.contact-card:hover { border-color: var(--primary); }
+.final .sub { margin-inline: auto; }
+.legal-note { margin-top: 20px; font-size: 14px; color: var(--faint); }
+.legal-note a, .faq details p a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
+
 .download {
   display: grid; grid-template-columns: 1.3fr 1fr; gap: 40px; align-items: center;
   padding: clamp(28px, 5vw, 56px); border-radius: 28px; color: #fff;
@@ -339,12 +370,37 @@ ul { margin: 0; padding: 0; list-style: none; }
 .reveal { opacity: 0; transform: translateY(16px); transition: opacity .6s ease, transform .6s ease; }
 .reveal.in { opacity: 1; transform: none; }
 
+/* ---------- Yasal metin (KVKK) ---------- */
+.legal { padding: 56px 0 88px; }
+.legal h1 { font-size: clamp(32px, 5vw, 48px); font-weight: 800; letter-spacing: -0.035em; line-height: 1.1; }
+.legal .updated { margin-top: 12px; color: var(--faint); font-size: 14px; }
+.legal h2 { margin-top: 40px; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+.legal p, .legal li { color: var(--muted); font-size: 16px; }
+.legal p { margin-top: 12px; }
+.legal ul, .legal ol { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.legal ul { list-style: disc; padding-left: 22px; }
+.legal ol { list-style: none; padding-left: 0; }
+.legal ol li { position: relative; padding-left: 30px; }
+.legal ol li > i { position: absolute; left: 0; font-style: normal; font-weight: 700; color: var(--primary); }
+.legal b { color: var(--text); }
+.legal a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
+.legal .box { margin-top: 20px; padding: 18px 20px; border-radius: var(--radius); background: var(--primary-soft); border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent); }
+.legal .box p { margin-top: 0; color: var(--text); }
+.table-wrap { margin-top: 16px; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.legal table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 14.5px; }
+.legal th, .legal td { text-align: left; vertical-align: top; padding: 12px 14px; border-top: 1px solid var(--border); color: var(--muted); }
+.legal thead th { border-top: 0; background: var(--surface-2); color: var(--faint); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.legal td:first-child { color: var(--text); font-weight: 600; }
+.legal .eyebrow { color: var(--primary); margin-top: 0; }
+.legal .back-link { text-decoration: none; }
+.back-link { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; color: var(--primary); margin-bottom: 20px; }
+
 /* ---------- Duyarlı yerleşim ---------- */
 @media (max-width: 980px) {
   .bento { grid-template-columns: repeat(2, 1fr); }
   .sectors, .plans { grid-template-columns: 1fr 1fr; }
   .numbers { grid-template-columns: 1fr 1fr; }
-  .trust-inner, .download { grid-template-columns: 1fr; }
+  .trust-inner, .download, .demo-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
   .section { padding: 64px 0; }
@@ -354,4 +410,7 @@ ul { margin: 0; padding: 0; list-style: none; }
   .cta-row .btn { flex: 1 1 100%; }
   .numbers > div { padding: 20px; }
   .footer-inner { flex-direction: column; text-align: center; }
+  .footer nav { flex-wrap: wrap; justify-content: center; gap: 8px 20px; }
+  .contact-lines, .contact-cards { grid-template-columns: 1fr; }
+  .after, .plan { padding: 24px; }
 }

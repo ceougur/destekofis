@@ -21,20 +21,19 @@ Depo Vercel'e bağlıdır (proje: `destek-ofis`, kök klasör: `web`).
 
 Alan adı alındığında Vercel panelinde projeye girip **Settings → Domains** bölümünden eklenir.
 
-## Doldurulacak yerler
+## İçerik notları
 
-`web/index.html` içinde köşeli parantezli metinler yer tutucudur:
+- Site şimdilik yalnızca **demoyu** tanıtır; lisans satışı siteden yapılmaz. Demodan sonra devam etmek isteyenler
+  telefon (0532 605 05 87) veya e-postayla (bilgi.ugurcetin@gmail.com) iletişime geçer.
+- `web/kvkk.html` KVKK aydınlatma metnidir (`/kvkk`). Veri sorumlusunun ad-soyad/unvan ve adresi eklenmek istenirse
+  "1. Veri sorumlusu" bölümüne yazılır.
+- `web/vercel.json`: `cleanUrls` (`/kvkk.html` → `/kvkk`) ve temel güvenlik başlıkları.
 
-- `[Demo süresi / kayıt sınırı]` — Lisans bölümü, Demo kartı
-- `[₺ ____ ] / [dönem]` — Lisans bölümü, Ofis Lisansı fiyatı
-- `[Demo verilerinin lisanslı sürüme aktarımı ...]` — SSS
-- `mailto:[iletisim@alanadiniz.com]` — Son bölümdeki "Bize yazın" düğmesi
+## İndirme bağlantısı
 
-## İndirme bağlantıları
-
-"Demo sürümü indir" ve "Lisanslı sürümü indir" düğmeleri şimdilik "çok yakında" bildirimi gösterir.
-Dosyalar hazır olduğunda `web/index.html` içinde `data-soon="demo"` ve `data-soon="lisans"` olan iki bağlantının
-`href="#"` değerini indirme adresiyle değiştirip `data-soon` özelliğini silmek yeterlidir.
+"Demo sürümü indir" düğmesi şimdilik "çok yakında" bildirimi gösterir (bildirimde telefon numarası da yazar).
+Kurulum dosyası yayımlandığında `web/index.html` içinde `data-soon="demo"` olan bağlantının `href="#"` değerini
+indirme adresiyle değiştirip `data-soon` özelliğini silmek yeterlidir.
 
 ## Supabase
 
