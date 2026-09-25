@@ -70,8 +70,11 @@ Gizli değerler depoya ve belgelere yazılmaz. Vercel'deki gizli değerler sonra
 - `web/kvkk.html` KVKK aydınlatma metnidir. Veri sorumlusu: Uğur Çetin, Karatay / Konya / Türkiye (alan adı ve
   açık adres belli olunca "1. Veri sorumlusu" bölümünde güncellenir).
 
-## İndirme bağlantısı
+## İndirme bağlantıları
 
-"Demo sürümü indir" düğmesi şimdilik "çok yakında" bildirimi gösterir (bildirimde telefon numarası da yazar).
-Kurulum dosyası yayımlandığında `web/index.html` içinde `data-soon="demo"` olan bağlantının `href="#"` değerini
-indirme adresiyle değiştirip `data-soon` özelliğini silmek yeterlidir.
+- **Demo:** `https://github.com/ceougur/ofis---y-netimi/releases/latest/download/DestekOfis-Kurulum.exe`. Her yeni
+  sürümde GitHub Release'e kurulum dosyası **`DestekOfis-Kurulum.exe`** adıyla (sürüm numarasız) eklenir; site
+  kendiliğinden en yeni sürümü indirir, siteye dokunmak gerekmez.
+- **Kullanım kılavuzu:** `web/indir/DestekOfis-Kullanim-Kilavuzu.pdf` (sitede barındırılır). Kılavuz değişince bu
+  dosya program deposundaki `client/kilavuz/DestekOfis-Kullanim-Kilavuzu.pdf` ile değiştirilir.
+- Demo indirilince kılavuz yeni sekmede açılır (`web/assets/main.js`).
