@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Operatör Merkezi — Destek Ofis</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/admin.css">
+</head>
+<body>
+  <!-- GİRİŞ -->
+  <main class="login" id="login" hidden>
+    <form class="login-card" id="loginForm" novalidate>
+      <div class="brand"><img src="assets/favicon.svg" alt="" width="36" height="36"><span>Destek Ofis</span></div>
+      <h1>Operatör Merkezi</h1>
+      <p class="muted">Lisansları ve programı kullanan ofisleri buradan yönetirsiniz.</p>
+      <label class="field">
+        <span>Parola</span>
+        <input type="password" id="loginPassword" autocomplete="current-password" required>
+      </label>
+      <p class="form-error" id="loginError" role="alert"></p>
+      <button class="btn btn-primary btn-block" type="submit" id="loginButton">Giriş yap</button>
+    </form>
+  </main>
+
+  <!-- UYGULAMA -->
+  <div class="app" id="app" hidden>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="#ozet"><img src="assets/favicon.svg" alt="" width="30" height="30"><span>Operatör Merkezi</span></a>
+        <nav class="tabs" aria-label="Bölümler">
+          <a href="#ozet" data-view="ozet">Özet</a>
+          <a href="#kullananlar" data-view="kullananlar">Kullananlar</a>
+          <a href="#lisanslar" data-view="lisanslar">Lisanslar</a>
+          <a href="#hareketler" data-view="hareketler">Hareketler</a>
+          <a href="#ayarlar" data-view="ayarlar">Ayarlar</a>
+        </nav>
+        <div class="topbar-actions">
+          <button class="btn btn-ghost btn-sm" type="button" id="refreshButton" title="Ekranı yenile">Yenile</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="logoutButton">Çıkış</button>
+        </div>
+      </div>
+    </header>
+    <main class="content" id="content" tabindex="-1"></main>
+  </div>
+
+  <div class="modal-backdrop" id="modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow" id="modalEyebrow"></p>
+          <h2 id="modalTitle"></h2>
+        </div>
+        <button class="icon-btn" type="button" id="modalClose" aria-label="Kapat">×</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="assets/admin.js"></script>
+</body>
+</html>
