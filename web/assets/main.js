@@ -41,13 +41,36 @@
     timer = setTimeout(() => toast.classList.remove("show"), 3200);
   }));
 
-  // Demo indirilince kullanım kılavuzu da yeni sekmede açılır.
-  document.getElementById("demoDownload")?.addEventListener("click", () => {
-    const guide = document.getElementById("guideDownload");
-    if (guide) window.open(guide.href, "_blank", "noopener");
-    const next = document.getElementById("downloadNext");
-    if (next) next.hidden = false;
-  });
+  // Demo indirilince sağ altta bilgi kartı açılır: indirmenin başladığını, dosyanın nerede görüleceğini ve sonraki
+  // adımları gösterir. Sayfadan ayrılınmaz (kılavuz karttaki düğmeyle açılır; kurulumun içinde de vardır).
+  const card = document.getElementById("dlCard");
+  let stateTimer;
+  const closeCard = () => {
+    if (!card || card.hidden) return;
+    card.classList.remove("show");
+    setTimeout(() => { card.hidden = true; }, 220);
+  };
+  const openCard = () => {
+    if (!card) return;
+    clearTimeout(stateTimer);
+    const title = document.getElementById("dlTitle");
+    card.classList.remove("started");
+    title.textContent = "İndirme başlatılıyor…";
+    const windows = /Windows/i.test(navigator.userAgent);
+    document.getElementById("dlPlatform").hidden = windows;
+    document.getElementById("dlWhere").hidden = !windows && /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+    card.hidden = false;
+    requestAnimationFrame(() => card.classList.add("show"));
+    // Tarayıcı indirmeyi birkaç saniye içinde başlatır; ilerleme tarayıcının kendi listesinde görünür.
+    stateTimer = setTimeout(() => {
+      card.classList.add("started");
+      title.textContent = "Dosya indiriliyor";
+    }, 1400);
+  };
+  document.getElementById("demoDownload")?.addEventListener("click", openCard);
+  document.getElementById("dlRetry")?.addEventListener("click", openCard);
+  document.getElementById("dlClose")?.addEventListener("click", closeCard);
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeCard(); });
 
   // Görünür olunca yumuşak giriş
   const items = document.querySelectorAll(".card, .section-head, .statement h2, .numbers > div, .download, .trust-list li");

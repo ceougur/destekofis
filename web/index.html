@@ -323,9 +323,6 @@
               <svg viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6z"/><path d="M9 11h6M9 15h6"/></svg>
               Kullanım kılavuzu (PDF)
             </a>
-            <div class="download-next" id="downloadNext" hidden role="status">
-              <b>İndirme başladı.</b> Kurulumu adım adım anlatan resimli kılavuz da yeni sekmede açıldı. Açılmadıysa <a href="/indir/DestekOfis-Kullanim-Kilavuzu.pdf" target="_blank" rel="noopener">buradan indirin</a>.
-            </div>
             <a href="#iletisim" class="btn btn-outline-white btn-lg">
               <svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>
               Kurulumda yardım isteyin
@@ -419,6 +416,33 @@
   </footer>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <!-- Demo indirilince açılan bilgi kartı: indirmenin başladığını ve sonraki adımları gösterir -->
+  <aside class="dl-card" id="dlCard" hidden aria-labelledby="dlTitle">
+    <button type="button" class="dl-close" id="dlClose" aria-label="Kapat">×</button>
+    <div class="dl-head">
+      <span class="dl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></span>
+      <div>
+        <p class="dl-title" id="dlTitle" role="status" aria-live="polite">İndirme başlatılıyor…</p>
+        <p class="dl-file">DestekOfis-Kurulum.exe · 27 MB</p>
+      </div>
+    </div>
+    <div class="dl-bar" aria-hidden="true"><span></span></div>
+    <p class="dl-where" id="dlWhere">İndirmenin ilerleyişini tarayıcınızın indirilenler listesinde görebilirsiniz (<kbd>Ctrl</kbd> + <kbd>J</kbd>).</p>
+    <p class="dl-platform" id="dlPlatform" hidden>Bu kurulum dosyası <b>Windows bilgisayarlar</b> içindir. Telefondan indirdiyseniz programı bilgisayarınızdan indirip kurun.</p>
+    <ol class="dl-steps">
+      <li><b>İndirilen dosyayı açın.</b> Sunucu olacak bilgisayarda çalıştırın.</li>
+      <li><b>“Windows bilgisayarınızı korudu” uyarısı çıkarsa</b> <i>Ek bilgi</i> → <i>Yine de çalıştır</i>’a tıklayın.</li>
+      <li><b>Sihirbazda “Sunucu”yu seçin.</b> Kurulum bitince 30 günlük deneme kendiliğinden başlar.</li>
+    </ol>
+    <div class="dl-actions">
+      <a class="btn btn-primary btn-block" href="/indir/DestekOfis-Kullanim-Kilavuzu.pdf" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6z"/><path d="M9 11h6M9 15h6"/></svg>
+        Resimli kurulum kılavuzunu aç
+      </a>
+      <p class="dl-retry">İndirme başlamadı mı? <a id="dlRetry" href="https://github.com/ceougur/ofis---y-netimi/releases/latest/download/DestekOfis-Kurulum.exe">Tekrar deneyin</a> · Yardım: <a href="tel:+905326050587">0532 605 05 87</a></p>
+    </div>
+  </aside>
   <script src="assets/main.js"></script>
 </body>
 </html>

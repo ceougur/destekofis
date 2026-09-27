@@ -341,8 +341,6 @@ ul { margin: 0; padding: 0; list-style: none; }
 .reqs li::before { content: ""; position: absolute; left: 0; top: 9px; width: 7px; height: 7px; border-radius: 50%; background: #7ee2b3; }
 .download-actions { display: flex; flex-direction: column; gap: 12px; }
 .download-actions small { color: #cde7db; font-size: 13px; text-align: center; }
-.download-next { padding: 12px 14px; border-radius: 12px; background: rgba(255,255,255,.12); color: #fff; font-size: 14px; }
-.download-next a { color: #fff; text-decoration: underline; }
 
 .faq { display: flex; flex-direction: column; gap: 12px; }
 .faq details { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 4px 20px; transition: box-shadow .2s; }
@@ -415,4 +413,65 @@ ul { margin: 0; padding: 0; list-style: none; }
   .footer nav { flex-wrap: wrap; justify-content: center; gap: 8px 20px; }
   .contact-lines, .contact-cards { grid-template-columns: 1fr; }
   .after, .plan { padding: 24px; }
+}
+
+/* Demo indirme kartı */
+.dl-card {
+  position: fixed; right: 24px; bottom: 24px; z-index: 60;
+  width: min(380px, calc(100vw - 32px));
+  padding: 20px 20px 16px;
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--surface); color: var(--text);
+  box-shadow: var(--shadow-lg);
+  opacity: 0; transform: translateY(16px) scale(.98);
+  transition: opacity .22s ease, transform .22s ease;
+}
+.dl-card.show { opacity: 1; transform: none; }
+.dl-close {
+  position: absolute; top: 10px; right: 10px; width: 32px; height: 32px;
+  border: 0; border-radius: 10px; background: transparent; color: var(--faint);
+  font-size: 22px; line-height: 1; cursor: pointer;
+}
+.dl-close:hover, .dl-close:focus-visible { background: var(--bg-soft); color: var(--text); outline: none; }
+.dl-head { display: flex; align-items: center; gap: 12px; padding-right: 28px; }
+.dl-icon {
+  display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 12px;
+  background: var(--primary-soft); color: var(--primary);
+}
+.dl-icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.dl-card:not(.started) .dl-icon svg { animation: dl-bob 1s ease-in-out infinite; }
+@keyframes dl-bob { 0%, 100% { transform: translateY(-2px); } 50% { transform: translateY(2px); } }
+.dl-title { margin: 0; font-size: 17px; font-weight: 700; }
+.dl-file { margin: 2px 0 0; color: var(--faint); font-size: 13px; }
+.dl-bar { position: relative; height: 4px; margin: 14px 0 10px; overflow: hidden; border-radius: 99px; background: var(--bg-soft); }
+.dl-bar span {
+  position: absolute; inset: 0 auto 0 0; width: 38%; border-radius: inherit;
+  background: linear-gradient(90deg, var(--grad-a), var(--grad-b));
+  animation: dl-slide 1.3s ease-in-out infinite;
+}
+@keyframes dl-slide { 0% { left: -40%; } 100% { left: 100%; } }
+.dl-where, .dl-platform { margin: 0 0 10px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.dl-platform { padding: 8px 10px; border-radius: 10px; background: var(--warn-bg); color: var(--warn); }
+.dl-where kbd {
+  padding: 1px 5px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px;
+  background: var(--surface-2); font: 600 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.dl-steps { margin: 0 0 14px; padding: 0; list-style: none; counter-reset: dl; display: grid; gap: 8px; }
+.dl-steps li { position: relative; padding-left: 32px; font-size: 13.5px; line-height: 1.45; color: var(--muted); counter-increment: dl; }
+.dl-steps li::before {
+  content: counter(dl); position: absolute; left: 0; top: 0; display: grid; place-items: center;
+  width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: var(--on-primary);
+  font-size: 12px; font-weight: 700;
+}
+.dl-steps b { color: var(--text); }
+.dl-actions .btn { justify-content: center; }
+.dl-actions .btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.dl-retry { margin: 10px 0 0; color: var(--faint); font-size: 12.5px; text-align: center; }
+.dl-retry a { color: var(--primary); }
+@media (max-width: 560px) {
+  .dl-card { right: 16px; left: 16px; bottom: 16px; width: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dl-card, .dl-card:not(.started) .dl-icon svg, .dl-bar span { animation: none; transition: none; }
+  .dl-bar span { left: 0; width: 100%; opacity: .5; }
 }
