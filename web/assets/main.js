@@ -43,6 +43,8 @@
 
   // Demo indirilince sağ altta bilgi kartı açılır: indirmenin başladığını, dosyanın nerede görüleceğini ve sonraki
   // adımları gösterir. Sayfadan ayrılınmaz (kılavuz karttaki düğmeyle açılır; kurulumun içinde de vardır).
+  // Tarayıcı indirmenin bittiğini sayfaya bildirmez; bu yüzden kart "indiriliyor"da beklemez: kısa bir "başlatılıyor"
+  // durumundan sonra onay işaretiyle "İndirme başladı" der ve dosyanın İndirilenler listesinde görüneceğini söyler.
   const card = document.getElementById("dlCard");
   let stateTimer;
   const closeCard = () => {
@@ -64,7 +66,7 @@
     // Tarayıcı indirmeyi birkaç saniye içinde başlatır; ilerleme tarayıcının kendi listesinde görünür.
     stateTimer = setTimeout(() => {
       card.classList.add("started");
-      title.textContent = "Dosya indiriliyor";
+      title.textContent = "İndirme başladı";
     }, 1400);
   };
   document.getElementById("demoDownload")?.addEventListener("click", openCard);

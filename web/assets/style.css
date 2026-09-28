@@ -440,6 +440,11 @@ ul { margin: 0; padding: 0; list-style: none; }
 }
 .dl-icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .dl-card:not(.started) .dl-icon svg { animation: dl-bob 1s ease-in-out infinite; }
+/* Başladıktan sonra: ok yerine onay işareti, hareketli çubuk kalkar (tarayıcı bitişi bildirmez; sahte ilerleme gösterilmez). */
+.dl-icon .dl-check, .dl-card.started .dl-icon .dl-arrow { display: none; }
+.dl-card.started .dl-icon .dl-check { display: block; }
+.dl-card.started .dl-bar { display: none; }
+.dl-card.started .dl-head { margin-bottom: 12px; }
 @keyframes dl-bob { 0%, 100% { transform: translateY(-2px); } 50% { transform: translateY(2px); } }
 .dl-title { margin: 0; font-size: 17px; font-weight: 700; }
 .dl-file { margin: 2px 0 0; color: var(--faint); font-size: 13px; }
