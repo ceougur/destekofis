@@ -34,6 +34,14 @@ ve operatör merkezini otomatik olarak yeniden yayınlar. Alan adı alındığı
   oluşturma, bilgisayara lisans verme, süre değiştirme, engelleme, taşıma (bilgisayardan ayırma), internetsiz etkinleştirme
   kodu, KVKK silme, hareket kaydı ve parola değişimi.
 - **Durum:** `GET /api/lisans/v1/durum` imza anahtarının ve veritabanı bağlantısının durumunu verir (gizli bilgi içermez).
+- **Altyapı limitleri (Özet):** iki kart, Vercel (fonksiyon çağrısı, API veri aktarımı) ve Supabase (veritabanı boyutu,
+  egress) kullanımını kotaya oranlar; %70'te sarı, %90'da kırmızı uyarı verir, üst çubukta rozet çıkar ve hareketlere
+  `infra.warning` yazılır (günde bir kez). Sayım veritabanında yapılır: `public.lisans_*` fonksiyonları her isteği ve yanıt
+  boyutunu `lisans.usage_daily` tablosuna işler (isteğin kendi işleminde; Vercel'e ya da Supabase'e **ek istek yoktur**).
+  Veritabanı boyutu `pg_database_size` ile canlı okunur. Site sayfaları ve indirmeler sayıma girmez (indirmeler GitHub'dadır);
+  resmî rakamlar Vercel ve Supabase panolarındaki *Usage* sayfalarındadır. Operatör merkezi kullanımı 10 dakika
+  önbelleklenir; **Yenile** ile tazelenir. Kotalar ve dönem başlangıç günü *Ayarlar → Altyapı kotaları*'ndan değiştirilir
+  (`lisans.settings.infra_limits`; varsayılan Vercel Hobby 1.000.000 çağrı / 100 GB, Supabase Free 500 MB / 5 GB).
 
 ### Veritabanı (Supabase `destekofis`)
 
@@ -41,6 +49,9 @@ ve operatör merkezini otomatik olarak yeniden yayınlar. Alan adı alındığı
 `public.lisans_activate`, `public.lisans_check` ve `public.lisans_operator` fonksiyonlarını çağırır. Üçü de ilk parametre
 olarak API sırrını ister (veritabanında yalnızca SHA-256 özeti saklanır). Operatör parolası bcrypt özetidir; oturumlar
 veritabanında tutulur, tarayıcıda yalnızca HttpOnly çerezde rastgele bir belirteç bulunur.
+
+Üç fonksiyon ince sarmalayıcıdır: gövdeleri `lisans.activate_impl`, `lisans.check_impl` ve `lisans.operator_impl`
+içindedir; sarmalayıcı sonucu döndürmeden önce `lisans.count_usage` ile isteği sayar (Altyapı limitleri).
 
 Supabase güvenlik danışmanı bu üç fonksiyon için "anon çalıştırabilir" uyarısı verir; bilinçlidir (API'nin giriş
 noktalarıdır ve sır olmadan hiçbir şey döndürmez). Tablolarda RLS açıktır, politika yoktur: doğrudan erişim kapalıdır.

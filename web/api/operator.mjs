@@ -9,7 +9,7 @@ const SESSION_SECONDS = 12 * 3600;
 const ACTIONS = new Set([
   "me", "logout", "overview", "installations", "licenses", "events", "create_license", "update_license",
   "set_license_status", "release_license", "delete_license", "license_code", "update_installation", "set_trial",
-  "forget_installation", "change_password",
+  "forget_installation", "change_password", "infra", "update_infra_limits",
 ]);
 
 function sessionCookie(request, value, maxAge) {
