@@ -35,7 +35,7 @@
   let timer;
   document.querySelectorAll("[data-soon]").forEach(el => el.addEventListener("click", e => {
     e.preventDefault();
-    toast.textContent = "Demo sürümü çok yakında burada olacak. Hemen denemek için bizi arayın: 0532 605 05 87";
+    toast.textContent = "Demo sürümü çok yakında burada olacak. Hemen denemek için bizi arayın (Teknik Destek ve Satın Alımlar İçin): 0536 771 50 55";
     toast.classList.add("show");
     clearTimeout(timer);
     timer = setTimeout(() => toast.classList.remove("show"), 3200);
