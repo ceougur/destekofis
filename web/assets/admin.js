@@ -17,6 +17,7 @@
     licenses: null,
     filters: { kullananlar: "all", lisanslar: "all", hareketler: "all" },
     search: { kullananlar: "", lisanslar: "" },
+    infra: null, // Altyapı limitleri: { at, data } — 10 dakika önbellek (her sayfa açılışında sunucuya gidilmez)
   };
 
   // ---------- Biçimlendirme ----------
@@ -24,6 +25,17 @@
   const dateTimeFormat = new Intl.DateTimeFormat("tr-TR", { timeZone: TZ, day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
   const fmtDate = iso => (iso ? dateFormat.format(new Date(iso)) : "—");
   const fmtDateTime = iso => (iso ? dateTimeFormat.format(new Date(iso)) : "—");
+  const fmtInt = value => new Intl.NumberFormat("tr-TR").format(Math.round(Number(value) || 0));
+  const fmtPct = value => new Intl.NumberFormat("tr-TR", { maximumFractionDigits: Number(value) < 1 ? 2 : 1 }).format(Number(value) || 0);
+  function fmtBytes(value) {
+    const n = Number(value) || 0;
+    if (n >= 1073741824) return `${new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 }).format(n / 1073741824)} GB`;
+    if (n >= 1048576) return `${new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 }).format(n / 1048576)} MB`;
+    if (n >= 1024) return `${new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 }).format(n / 1024)} KB`;
+    return `${fmtInt(n)} B`;
+  }
+  const INFRA_METRIC = { "vercel.requests": "Vercel fonksiyon çağrısı", "vercel.transfer": "Vercel veri aktarımı", "supabase.db": "Supabase veritabanı boyutu", "supabase.egress": "Supabase egress" };
+  const INFRA_LEVEL_TEXT = { ok: "Normal", warn: "%70'i aştı", bad: "%90'ı aştı" };
   function ago(iso) {
     if (!iso) return "henüz bağlanmadı";
     const minutes = Math.round((Date.now() - Date.parse(iso)) / 60_000);
@@ -114,6 +126,8 @@
     "installation.contact": "Firma bilgilerini bıraktı (denemenin 3. günü)",
     "installation.updated": "Ofis bilgileri düzenlendi",
     "installation.forgotten": "Kişisel bilgiler silindi (KVKK)",
+    "infra.warning": event => `Altyapı kullanımı eşiği aştı: ${INFRA_METRIC[event.detail?.metric] || event.detail?.metric} %${fmtPct(event.detail?.pct)}`,
+    "infra.limits_updated": "Altyapı kotaları güncellendi",
     "operator.login": "Operatör giriş yaptı",
     "operator.login_failed": "Hatalı parolayla giriş denendi",
     "operator.password_changed": "Operatör parolası değiştirildi",
@@ -189,6 +203,67 @@
     }
     if (!response.ok || !data?.ok) throw new UiError(data?.error || `Sunucu hatası (${response.status}). Biraz sonra tekrar deneyin.`);
     return data;
+  }
+  // Altyapı limitleri: sayım veritabanında yapılır (her isteğin kendi işleminde); Vercel'e ya da Supabase'e ek istek yoktur.
+  // Bu çağrının kendisi tek bir veritabanı isteğidir ve 10 dakika önbelleklenir.
+  async function loadInfra(force = false) {
+    if (!force && state.infra && Date.now() - state.infra.at < 10 * 60_000) return state.infra.data;
+    const data = await api("infra");
+    state.infra = { at: Date.now(), data };
+    paintInfraBadge(data);
+    return data;
+  }
+  function paintInfraBadge(data) {
+    const badge = $("#infraBadge");
+    if (!badge) return;
+    const level = data?.level || "ok";
+    badge.hidden = level === "ok";
+    badge.className = `infra-badge ${level}`;
+    const worst = Math.max(data?.vercel?.requestsPct || 0, data?.vercel?.transferPct || 0, data?.supabase?.dbPct || 0, data?.supabase?.egressPct || 0);
+    badge.textContent = `Altyapı %${fmtPct(worst)}`;
+  }
+  function meterHtml(label, used, limit, pct, note, unit = "bytes") {
+    const level = pct >= 90 ? "bad" : pct >= 70 ? "warn" : "ok";
+    const fmt = unit === "bytes" ? fmtBytes : fmtInt;
+    return `<div class="meter ${level}">
+      <div class="meter-head"><span>${esc(label)}</span><b>${esc(fmt(used))} / ${esc(fmt(limit))}</b></div>
+      <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(100, Math.max(0, pct))}" aria-label="${esc(label)}"><i style="width:${Math.min(100, Math.max(0.4, pct))}%"></i></div>
+      <small>%${esc(fmtPct(pct))} kullanıldı · kalan ${esc(fmt(Math.max(0, limit - used)))}${note ? ` · ${esc(note)}` : ""}</small>
+    </div>`;
+  }
+  function infraHtml(data) {
+    const v = data.vercel;
+    const s = data.supabase;
+    const since = data.measuredSince ? `Sayım ${fmtDate(data.measuredSince)} tarihinden beri` : "Henüz sayım yok";
+    const idleDays = data.lastRequestAt ? (Date.now() - new Date(data.lastRequestAt).getTime()) / 86400000 : null;
+    const idleNote = idleDays != null && idleDays >= 5 ? `<div class="note warn">Programlardan ${Math.floor(idleDays)} gündür istek gelmedi. Supabase ücretsiz planda 7 gün istek almayan projeyi duraklatır; panodan uyandırmak gerekir.</div>` : "";
+    const levelPill = level => `<span class="pill ${level}">${esc(INFRA_LEVEL_TEXT[level] || level)}</span>`;
+    return `<div class="infra-grid">
+      <article class="infra-card ${esc(v.level)}" data-infra="vercel">
+        <header><div><b>Vercel</b><small>Lisans servisi ve site · Hobby planı</small></div>${levelPill(v.level)}</header>
+        ${meterHtml("Fonksiyon çağrısı (bu dönem)", v.requests, v.requestsLimit, v.requestsPct, `bugün ${fmtInt(v.todayRequests)}`, "count")}
+        ${meterHtml("Veri aktarımı (API yanıtları)", v.transferBytes, v.transferLimitBytes, v.transferPct, "yaklaşık")}
+        <footer><small>Site sayfaları ve indirmeler sayıma girmez (indirme dosyaları GitHub'dadır). Resmî rakam: Vercel panosu › Usage.</small></footer>
+      </article>
+      <article class="infra-card ${esc(s.level)}" data-infra="supabase">
+        <header><div><b>Supabase</b><small>Lisans veritabanı · Free planı</small></div>${levelPill(s.level)}</header>
+        ${meterHtml("Veritabanı boyutu", s.dbBytes, s.dbLimitBytes, s.dbPct, `${fmtInt(s.rows.installations)} kurulum · ${fmtInt(s.rows.licenses)} lisans · ${fmtInt(s.rows.events)} hareket`)}
+        ${meterHtml("Egress (API yanıtları, bu dönem)", s.egressBytes, s.egressLimitBytes, s.egressPct, "yaklaşık")}
+        <footer><small>Son program isteği: ${data.lastRequestAt ? esc(ago(data.lastRequestAt)) : "henüz yok"}. Resmî rakam: Supabase panosu › Usage.</small></footer>
+      </article>
+    </div>
+    ${idleNote}
+    <p class="muted infra-foot">Dönem ${esc(fmtDate(data.period.start))} – ${esc(fmtDate(data.period.end))} (${fmtInt(data.period.daysLeft)} gün kaldı). ${esc(since)}; sayım isteğin kendi işleminde yapılır, dış servise ek istek atılmaz. %70'te sarı, %90'da kırmızı uyarı verilir ve hareketlere yazılır. Kotalar <a href="#ayarlar">Ayarlar</a>'dan değiştirilir.</p>`;
+  }
+  async function renderInfra(section, force = false) {
+    const box = $("[data-infra-body]", section);
+    box.innerHTML = '<p class="faint">Kullanım okunuyor…</p>';
+    try {
+      const data = await loadInfra(force);
+      box.innerHTML = infraHtml(data);
+    } catch (error) {
+      box.innerHTML = `<p class="form-error">Altyapı kullanımı alınamadı: ${esc(error.message)}</p>`;
+    }
   }
   async function loadInstallations(force = false) {
     if (!state.installations || force) state.installations = (await api("installations")).items;
@@ -364,6 +439,7 @@
     $("#login").hidden = true;
     $("#app").hidden = false;
     route();
+    loadInfra().catch(() => {});
   }
   $("#loginForm").addEventListener("submit", async event => {
     event.preventDefault();
@@ -509,6 +585,10 @@
         ${stat("lisanslar", "unused", "Kullanılmamış lisans", overview.unusedLicenses, "anahtarı verildi, henüz girilmedi")}
         ${stat("kullananlar", "blocked", "Engelli", counts.blocked, "program salt okunur çalışıyor", counts.blocked ? "bad" : "")}
       </div>
+      <section class="card" id="infraSection">
+        <div class="card-head"><h2>Altyapı limitleri</h2><span class="count-note">Vercel ve Supabase kotaları · canlı sayım · <button class="link-btn" type="button" data-act="infra-refresh">Yenile</button></span></div>
+        <div data-infra-body></div>
+      </section>
       <section class="card">
         <div class="card-head"><h2>Aranması gerekenler</h2><span class="count-note">Denemesi veya lisansı biten ve bitmek üzere olanlar</span></div>
         ${overview.attention.length ? `<div class="attention">${overview.attention.map(attentionRow).join("")}</div>` : '<div class="empty">Şu an aranması gereken kimse yok.</div>'}
@@ -517,6 +597,11 @@
         <div class="card-head"><h2>Son hareketler</h2><a class="link-btn" href="#hareketler">Tümünü gör</a></div>
         ${overview.recent.length ? `<div class="timeline">${overview.recent.map(eventRow).join("")}</div>` : '<div class="empty">Henüz hareket yok. Bir ofis demoyu başlattığında burada görünür.</div>'}
       </section>`;
+    const infraSection = $("#infraSection", content);
+    infraSection.addEventListener("click", event => {
+      if (event.target.closest('[data-act="infra-refresh"]')) renderInfra(infraSection, true);
+    });
+    renderInfra(infraSection);
   }
 
   // ---------- Kullananlar ----------
@@ -1176,6 +1261,21 @@
           </form>
         </section>
         <section class="card">
+          <h2>Altyapı kotaları</h2>
+          <p class="muted">Özet'teki Altyapı limitleri kartları bu kotalara göre yüzde hesaplar. Planınız değişirse buradan güncelleyin. Varsayılanlar: Vercel Hobby (1.000.000 çağrı, 100 GB) ve Supabase Free (500 MB, 5 GB).</p>
+          <form id="infraForm" novalidate>
+            <div class="form-grid">
+              <label class="field"><span>Vercel fonksiyon çağrısı (aylık)</span><input name="vercelRequests" inputmode="numeric"></label>
+              <label class="field"><span>Vercel veri aktarımı (GB, aylık)</span><input name="vercelTransferGb" inputmode="decimal"></label>
+              <label class="field"><span>Supabase veritabanı (MB)</span><input name="supabaseDbMb" inputmode="numeric"></label>
+              <label class="field"><span>Supabase egress (GB, aylık)</span><input name="supabaseEgressGb" inputmode="decimal"></label>
+              <label class="field"><span>Dönem başlangıç günü (1–28)</span><input name="cycleDay" inputmode="numeric"><small>Vercel ve Supabase faturalama döngüsünün başladığı gün.</small></label>
+            </div>
+            <p class="form-error" data-error></p>
+            <div><button class="btn btn-primary" type="submit">Kotaları kaydet</button></div>
+          </form>
+        </section>
+        <section class="card">
           <h2>Lisans servisi</h2>
           <div class="status-list" id="serviceStatus"><p class="faint">Denetleniyor…</p></div>
           <div class="note">Programlar lisans servisine şu adresten bağlanır:<br><span class="mono">${esc(location.origin)}/api/lisans</span></div>
@@ -1199,6 +1299,31 @@
       if (done) {
         form.reset();
         toast("Parola değiştirildi.");
+      }
+    });
+    const infraForm = $("#infraForm", content);
+    const KEYS = ["vercelRequests", "vercelTransferGb", "supabaseDbMb", "supabaseEgressGb", "cycleDay"];
+    loadInfra().then(data => {
+      for (const key of KEYS) infraForm.elements.namedItem(key).value = String(data.limits?.[key] ?? "").replace(".", ",");
+    }).catch(() => {});
+    infraForm.addEventListener("submit", async event => {
+      event.preventDefault();
+      const error = $("[data-error]", infraForm);
+      const args = {};
+      for (const key of KEYS) {
+        const raw = infraForm.elements.namedItem(key).value.trim().replace(/\./g, "").replace(",", ".");
+        const value = Number(raw);
+        if (!raw || !Number.isFinite(value) || value <= 0) {
+          error.textContent = "Tüm kotalar sıfırdan büyük bir sayı olmalı.";
+          return;
+        }
+        args[key] = value;
+      }
+      const done = await run($("button[type=submit]", infraForm), () => api("update_infra_limits", args), error);
+      if (done) {
+        state.infra = null;
+        loadInfra().catch(() => {});
+        toast("Kotalar kaydedildi.");
       }
     });
     const box = $("#serviceStatus", content);

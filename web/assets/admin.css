@@ -234,6 +234,28 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .history h3 { font-size: 15px; margin-bottom: 4px; }
 .section-title { font-size: 15px; font-weight: 700; }
 
+/* ---------- Altyapı limitleri ---------- */
+.infra-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.infra-card { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--surface-2); }
+.infra-card.warn { border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); background: var(--warn-bg); }
+.infra-card.bad { border-color: color-mix(in srgb, var(--bad) 45%, var(--border)); background: var(--bad-bg); }
+.infra-card header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.infra-card header b { display: block; font-size: 16px; }
+.infra-card header small { color: var(--muted); font-size: 13px; }
+.infra-card footer small, .infra-foot { color: var(--faint); font-size: 12.5px; line-height: 1.45; }
+.infra-foot { margin-top: 12px; }
+.meter { display: flex; flex-direction: column; gap: 5px; }
+.meter-head { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.meter-head b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bar { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--text) 10%, transparent); overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: inherit; background: var(--primary); transition: width .3s; }
+.meter.warn .bar i { background: var(--warn); }
+.meter.bad .bar i { background: var(--bad); }
+.meter small { color: var(--faint); font-size: 12.5px; }
+.infra-badge { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.infra-badge.warn { background: var(--warn-bg); color: var(--warn); }
+.infra-badge.bad { background: var(--bad-bg); color: var(--bad); }
+
 /* ---------- Bildirim ---------- */
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; z-index: 80;
@@ -252,6 +274,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @media (max-width: 900px) {
   .stats { grid-template-columns: 1fr 1fr; }
   .settings-grid { grid-template-columns: 1fr; }
+  .infra-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
   .topbar-inner { flex-wrap: wrap; gap: 8px 12px; padding: 8px 0; }

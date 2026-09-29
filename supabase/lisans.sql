@@ -85,6 +85,16 @@ create table if not exists lisans.events (
 create index if not exists events_at_idx on lisans.events (at desc);
 create index if not exists events_machine_idx on lisans.events (machine, at desc);
 create index if not exists events_license_idx on lisans.events (license_id, at desc);
+
+-- Altyapı kullanımı (operatör merkezi › Altyapı limitleri): her API isteği ve yanıt boyutu gün gün sayılır.
+-- Sayım isteğin kendi işleminde yapılır; Vercel'e ya da Supabase'e ek istek atılmaz.
+create table if not exists lisans.usage_daily (
+  day date not null,
+  source text not null check (source in ('program', 'operator')),
+  requests bigint not null default 0,
+  bytes_out bigint not null default 0,
+  primary key (day, source)
+);
 create index if not exists events_ip_idx on lisans.events (ip, type, at desc);
 
 create table if not exists lisans.sessions (
@@ -96,6 +106,7 @@ create table if not exists lisans.sessions (
 );
 
 alter table lisans.settings enable row level security;
+alter table lisans.usage_daily enable row level security;
 alter table lisans.installations enable row level security;
 alter table lisans.licenses enable row level security;
 alter table lisans.license_bindings enable row level security;
@@ -174,6 +185,14 @@ create or replace function lisans.log(p_type text, p_actor text, p_machine text,
 language sql volatile set search_path = '' as $$
   insert into lisans.events (type, actor, machine, license_id, ip, detail)
   values (p_type, p_actor, p_machine, p_license, coalesce(p_ip, ''), coalesce(p_detail, '{}'::jsonb))
+$$;
+
+-- Bir API isteğini ve yanıtının boyutunu günün sayacına ekler (program: lisans istekleri; operator: operatör merkezi).
+create or replace function lisans.count_usage(p_source text, p_result jsonb) returns void
+language sql volatile set search_path = '' as $$
+  insert into lisans.usage_daily as t (day, source, requests, bytes_out)
+  values (current_date, p_source, 1, coalesce(octet_length(p_result::text), 0))
+  on conflict (day, source) do update set requests = t.requests + 1, bytes_out = t.bytes_out + excluded.bytes_out
 $$;
 
 -- Bir bilgisayara bağlı lisanslardan geçerli olanı (yoksa en son olanı) seçer; p_prefer istenen lisanstır.
@@ -339,8 +358,8 @@ language sql volatile set search_path = '' as $$
 $$;
 
 -- ---------- Program: etkinleştirme (deneme veya lisans anahtarı) ----------
-create or replace function public.lisans_activate(p_secret text, p_body jsonb, p_ip text default '') returns jsonb
-language plpgsql volatile security definer set search_path = '' as $$
+create or replace function lisans.activate_impl(p_secret text, p_body jsonb, p_ip text) returns jsonb
+language plpgsql volatile set search_path = '' as $$
 declare
   m text;
   k text;
@@ -444,8 +463,8 @@ end $$;
 -- ---------- Program: düzenli doğrulama ----------
 -- Bilgisayara bağlı geçerli bir lisans varsa (operatörün panelden verdiği dahil) o döner; yoksa deneme. Lisans başka
 -- bilgisayara taşındıysa eski bilgisayara "engellendi" durumlu belirteç döner (program salt okunur olur).
-create or replace function public.lisans_check(p_secret text, p_body jsonb, p_ip text default '') returns jsonb
-language plpgsql volatile security definer set search_path = '' as $$
+create or replace function lisans.check_impl(p_secret text, p_body jsonb, p_ip text) returns jsonb
+language plpgsql volatile set search_path = '' as $$
 declare
   m text;
   lid text;
@@ -513,6 +532,27 @@ begin
     perform lisans.log('check.unknown', 'servis', m, lid, p_ip);
   end if;
   return lisans.reject('LICENSE_NOT_FOUND', 'Lisans bulunamadı.');
+end $$;
+
+-- Dışa açık uçlar: gövdeyi çağırır, isteği ve yanıt boyutunu sayar (Altyapı limitleri).
+create or replace function public.lisans_activate(p_secret text, p_body jsonb, p_ip text default '') returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+declare
+  r jsonb;
+begin
+  r := lisans.activate_impl(p_secret, p_body, p_ip);
+  perform lisans.count_usage('program', r);
+  return r;
+end $$;
+
+create or replace function public.lisans_check(p_secret text, p_body jsonb, p_ip text default '') returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+declare
+  r jsonb;
+begin
+  r := lisans.check_impl(p_secret, p_body, p_ip);
+  perform lisans.count_usage('program', r);
+  return r;
 end $$;
 
 -- ---------- Operatör işlemleri ----------
@@ -859,9 +899,128 @@ begin
   return jsonb_build_object('ok', true);
 end $$;
 
+-- ---------- Altyapı limitleri (operatör merkezi › Özet) ----------
+-- Varsayılan kotalar: Vercel Hobby (aylık 1 milyon fonksiyon çağrısı, 100 GB veri aktarımı) ve Supabase Free
+-- (500 MB veritabanı, aylık 5 GB egress). Operatör Ayarlar'dan değiştirebilir ('infra_limits' ayarı).
+create or replace function lisans.infra_limits() returns jsonb
+language sql stable set search_path = '' as $$
+  select jsonb_build_object('vercelRequests', 1000000, 'vercelTransferGb', 100, 'supabaseDbMb', 500, 'supabaseEgressGb', 5, 'cycleDay', 1)
+         || coalesce(nullif(lisans.setting('infra_limits'), '')::jsonb, '{}'::jsonb)
+$$;
+
+create or replace function lisans.infra_level(p_pct numeric) returns text
+language sql immutable as $$
+  select case when p_pct >= 90 then 'bad' when p_pct >= 70 then 'warn' else 'ok' end
+$$;
+
+-- Bu dönemin (kota döngüsü) kullanımı, veritabanı boyutu ve kotaya oranı; %70'i aşan ölçü günde bir kez hareketlere yazılır.
+create or replace function lisans.op_infra(p_args jsonb) returns jsonb
+language plpgsql volatile set search_path = '' as $$
+declare
+  lim jsonb := lisans.infra_limits();
+  cycle_day int := greatest(1, least(28, coalesce((lim ->> 'cycleDay')::int, 1)));
+  overhead int := 420; -- HTTP başlıkları ve zarf: yanıt başına yaklaşık ek bayt (yaklaşık ölçüm)
+  period_start date;
+  period_end date;
+  db_bytes bigint;
+  req_month bigint;
+  bytes_month bigint;
+  req_prog bigint;
+  req_today bigint;
+  bytes_today bigint;
+  last_at timestamptz;
+  first_day date;
+  vercel_requests_pct numeric;
+  vercel_transfer_pct numeric;
+  db_pct numeric;
+  egress_pct numeric;
+  worst text := 'ok';
+  metric record;
+begin
+  period_start := case when extract(day from current_date)::int >= cycle_day
+    then make_date(extract(year from current_date)::int, extract(month from current_date)::int, cycle_day)
+    else (make_date(extract(year from current_date)::int, extract(month from current_date)::int, cycle_day) - interval '1 month')::date end;
+  period_end := (period_start + interval '1 month')::date;
+  db_bytes := pg_database_size(current_database());
+  select coalesce(sum(requests), 0), coalesce(sum(bytes_out), 0), coalesce(sum(requests) filter (where source = 'program'), 0)
+    into req_month, bytes_month, req_prog
+  from lisans.usage_daily where day >= period_start and day < period_end;
+  select coalesce(sum(requests), 0), coalesce(sum(bytes_out), 0) into req_today, bytes_today from lisans.usage_daily where day = current_date;
+  select min(day) into first_day from lisans.usage_daily;
+  select max(last_seen) into last_at from lisans.installations;
+
+  vercel_requests_pct := round(100.0 * req_month / greatest(1, (lim ->> 'vercelRequests')::numeric), 1);
+  vercel_transfer_pct := round(100.0 * (bytes_month + req_month * overhead) / greatest(1, (lim ->> 'vercelTransferGb')::numeric * 1073741824), 2);
+  db_pct := round(100.0 * db_bytes / greatest(1, (lim ->> 'supabaseDbMb')::numeric * 1048576), 1);
+  egress_pct := round(100.0 * (bytes_month + req_month * overhead) / greatest(1, (lim ->> 'supabaseEgressGb')::numeric * 1073741824), 2);
+
+  -- %70 ve %90 eşikleri: günde bir kez hareket kaydı (Özet › Son hareketler ve Hareketler'de görünür).
+  for metric in select * from (values
+      ('vercel.requests', vercel_requests_pct), ('vercel.transfer', vercel_transfer_pct),
+      ('supabase.db', db_pct), ('supabase.egress', egress_pct)) as m(name, pct) loop
+    if lisans.infra_level(metric.pct) = 'bad' then worst := 'bad'; elsif lisans.infra_level(metric.pct) = 'warn' and worst <> 'bad' then worst := 'warn'; end if;
+    if metric.pct >= 70 and not exists (select 1 from lisans.events e where e.type = 'infra.warning' and e.at >= current_date
+                                        and e.detail ->> 'metric' = metric.name) then
+      perform lisans.log('infra.warning', 'servis', null, null, '', jsonb_build_object('metric', metric.name, 'pct', metric.pct,
+        'level', lisans.infra_level(metric.pct)));
+    end if;
+  end loop;
+
+  return jsonb_build_object(
+    'ok', true,
+    'level', worst,
+    'period', jsonb_build_object('start', period_start, 'end', period_end, 'daysLeft', greatest(0, period_end - current_date), 'cycleDay', cycle_day),
+    'limits', lim,
+    'measuredSince', first_day,
+    'lastRequestAt', lisans.iso(last_at),
+    'vercel', jsonb_build_object(
+      'requests', req_month, 'requestsLimit', (lim ->> 'vercelRequests')::bigint, 'requestsPct', vercel_requests_pct,
+      'transferBytes', bytes_month + req_month * overhead, 'transferLimitBytes', ((lim ->> 'vercelTransferGb')::numeric * 1073741824)::bigint, 'transferPct', vercel_transfer_pct,
+      'todayRequests', req_today, 'programRequests', req_prog,
+      'level', lisans.infra_level(greatest(vercel_requests_pct, vercel_transfer_pct))),
+    'supabase', jsonb_build_object(
+      'dbBytes', db_bytes, 'dbLimitBytes', ((lim ->> 'supabaseDbMb')::numeric * 1048576)::bigint, 'dbPct', db_pct,
+      'egressBytes', bytes_month + req_month * overhead, 'egressLimitBytes', ((lim ->> 'supabaseEgressGb')::numeric * 1073741824)::bigint, 'egressPct', egress_pct,
+      'rows', jsonb_build_object('installations', (select count(*) from lisans.installations), 'licenses', (select count(*) from lisans.licenses),
+                                 'events', (select count(*) from lisans.events)),
+      'level', lisans.infra_level(greatest(db_pct, egress_pct))),
+    'daily', coalesce((select jsonb_agg(d order by d ->> 'day') from (
+      select jsonb_build_object('day', day, 'requests', sum(requests), 'bytes', sum(bytes_out)) as d
+      from lisans.usage_daily where day > current_date - 14 group by day) x), '[]'::jsonb));
+end $$;
+
+-- Kotaları değiştirir (plan değişince). Sayılar pozitif; döngü günü 1–28.
+create or replace function lisans.op_update_infra_limits(p_args jsonb, p_ip text) returns jsonb
+language plpgsql volatile set search_path = '' as $$
+declare
+  v jsonb := '{}'::jsonb;
+  k text;
+  n numeric;
+begin
+  foreach k in array array['vercelRequests', 'vercelTransferGb', 'supabaseDbMb', 'supabaseEgressGb', 'cycleDay'] loop
+    if p_args ? k then
+      begin
+        n := (p_args ->> k)::numeric;
+      exception when others then
+        raise exception 'Geçersiz sayı: %', k;
+      end;
+      if k = 'cycleDay' then
+        if n < 1 or n > 28 or n <> trunc(n) then raise exception 'Dönem başlangıç günü 1 ile 28 arasında olmalı.'; end if;
+      elsif n <= 0 then
+        raise exception 'Kota sıfırdan büyük olmalı: %', k;
+      end if;
+      v := v || jsonb_build_object(k, n);
+    end if;
+  end loop;
+  insert into lisans.settings (key, value) values ('infra_limits', (lisans.infra_limits() || v)::text)
+  on conflict (key) do update set value = excluded.value, updated_at = now();
+  perform lisans.log('infra.limits_updated', 'operator', null, null, p_ip, v);
+  return jsonb_build_object('ok', true, 'limits', lisans.infra_limits());
+end $$;
+
 -- Operatör merkezinin tek giriş noktası. "login" ve "ping" dışındaki işlemler geçerli bir oturum ister.
-create or replace function public.lisans_operator(p_secret text, p_session text, p_action text, p_args jsonb default '{}'::jsonb, p_ip text default '') returns jsonb
-language plpgsql volatile security definer set search_path = '' as $$
+create or replace function lisans.operator_impl(p_secret text, p_session text, p_action text, p_args jsonb, p_ip text) returns jsonb
+language plpgsql volatile set search_path = '' as $$
 declare
   sess lisans.sessions;
   args jsonb := case when jsonb_typeof(p_args) = 'object' then p_args else '{}'::jsonb end;
@@ -902,12 +1061,25 @@ begin
       when 'set_trial' then return lisans.op_set_trial(args, p_ip);
       when 'forget_installation' then return lisans.op_forget_installation(args, p_ip);
       when 'change_password' then return lisans.op_change_password(args, sess.token_hash, p_ip);
+      when 'infra' then return lisans.op_infra(args);
+      when 'update_infra_limits' then return lisans.op_update_infra_limits(args, p_ip);
       else return lisans.reject('BAD_ACTION', 'Bilinmeyen işlem.', 400);
     end case;
   exception
     when raise_exception then return lisans.reject('INVALID', sqlerrm, 400);
     when others then return lisans.reject('DB_ERROR', 'Veritabanı hatası: ' || sqlerrm, 500);
   end;
+end $$;
+
+-- Dışa açık operatör ucu: gövdeyi çağırır, isteği ve yanıt boyutunu sayar ("ping" servis sağlık denetimidir; program tarafında sayılır).
+create or replace function public.lisans_operator(p_secret text, p_session text, p_action text, p_args jsonb default '{}'::jsonb, p_ip text default '') returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+declare
+  r jsonb;
+begin
+  r := lisans.operator_impl(p_secret, p_session, p_action, p_args, p_ip);
+  perform lisans.count_usage(case when p_action = 'ping' then 'program' else 'operator' end, r);
+  return r;
 end $$;
 
 -- ---------- Yetkiler ----------
