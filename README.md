@@ -77,7 +77,7 @@ Gizli değerler depoya ve belgelere yazılmaz. Vercel'deki gizli değerler sonra
 ## İçerik notları
 
 - Site şimdilik yalnızca **demoyu** tanıtır; lisans satışı siteden yapılmaz. Demodan sonra devam etmek isteyenler
-  telefon (0532 605 05 87) veya e-postayla (destekofis@proton.me) iletişime geçer.
+  telefonla (Teknik Destek ve Satın Alımlar İçin: 0536 771 50 55; genel: 0532 605 05 87) veya e-postayla (destekofis@proton.me) iletişime geçer.
 - `web/kvkk.html` KVKK aydınlatma metnidir. Veri sorumlusu: Uğur Çetin, Karatay / Konya / Türkiye (alan adı ve
   açık adres belli olunca "1. Veri sorumlusu" bölümünde güncellenir).
 

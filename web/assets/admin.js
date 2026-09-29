@@ -9,7 +9,8 @@
   const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
   const TZ = "Europe/Istanbul";
   const DAY = 86_400_000;
-  const SUPPORT_PHONE = "0532 605 05 87";
+  // Müşteriye giden lisans mesajındaki numara: teknik destek ve satın alımlar hattı.
+  const SUPPORT_PHONE = "0536 771 50 55";
 
   const state = {
     session: null,
