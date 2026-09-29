@@ -239,14 +239,20 @@ language sql stable set search_path = '' as $$
                   when l.machine is null then 'unused'
                   else 'active' end,
     'everBound', exists (select 1 from lisans.license_bindings b where b.license_id = l.id),
-    'installation', (select jsonb_build_object('officeName', i.office_name, 'lastSeen', lisans.iso(i.last_seen), 'version', i.version)
+    'installation', (select jsonb_build_object('officeName', i.office_name, 'contact', i.contact, 'email', i.email, 'phone', i.phone,
+                                               'lastSeen', lisans.iso(i.last_seen), 'version', i.version)
                      from lisans.installations i where i.machine = l.machine))
 $$;
 
 create or replace function lisans.installation_json(i lisans.installations, l lisans.licenses) returns jsonb
 language sql stable set search_path = '' as $$
   select jsonb_build_object(
-    'machine', i.machine, 'officeName', i.office_name, 'contact', i.contact, 'email', i.email, 'phone', i.phone,
+    -- Kurulum kaydında boş olan yetkili/e-posta/telefon bağlı lisanstan gösterilir (2.0.8: operatörün lisans verirken
+    -- girdiği bilgi "Kurulumlar" ve "Aranması gerekenler"de boş görünüyordu).
+    'machine', i.machine, 'officeName', case when i.office_name <> '' then i.office_name else coalesce(l.customer, '') end,
+    'contact', case when i.contact <> '' then i.contact else coalesce(l.contact, '') end,
+    'email', case when i.email <> '' then i.email else coalesce(l.email, '') end,
+    'phone', case when i.phone <> '' then i.phone else coalesce(l.phone, '') end,
     'note', i.note, 'version', i.version, 'firstSeen', lisans.iso(i.first_seen), 'lastSeen', lisans.iso(i.last_seen),
     'lastCheckAt', lisans.iso(i.last_check_at),
     'trial', case when i.trial_id is null then null else jsonb_build_object(
@@ -258,29 +264,78 @@ language sql stable set search_path = '' as $$
     'state', lisans.state_of(i, l))
 $$;
 
--- Bir kurulum kaydını oluşturur ya da görüldü bilgisini tazeler.
-create or replace function lisans.touch(p_machine text, p_body jsonb, p_ip text, p_office text default '') returns lisans.installations
+-- Müşteri bilgisi tek yerde (2.0.8): kurulum (bilgisayar) kaydı ile ona bağlı lisans birbirini besler. Kural: boş olan
+-- alan diğerinden dolar, dolu alan ezilmez. Operatörün lisans verirken girdiği yetkili/telefon/e-posta kuruluma; programın
+-- denemenin 3. gününde gönderdiği ya da operatörün kurulum kartına yazdığı bilgi lisansa geçer.
+create or replace function lisans.fill_installation(p_machine text, p_office text, p_contact text, p_email text, p_phone text) returns void
+language sql volatile set search_path = '' as $$
+  update lisans.installations set
+    office_name = case when office_name = '' then left(coalesce(p_office, ''), 120) else office_name end,
+    contact = case when contact = '' then left(coalesce(p_contact, ''), 120) else contact end,
+    email = case when email = '' then left(coalesce(p_email, ''), 160) else email end,
+    phone = case when phone = '' then left(coalesce(p_phone, ''), 40) else phone end
+  where machine = p_machine
+$$;
+create or replace function lisans.fill_license(p_license text, p_contact text, p_email text, p_phone text) returns void
+language sql volatile set search_path = '' as $$
+  update lisans.licenses set
+    contact = case when contact = '' then left(coalesce(p_contact, ''), 120) else contact end,
+    email = case when email = '' then left(coalesce(p_email, ''), 160) else email end,
+    phone = case when phone = '' then left(coalesce(p_phone, ''), 40) else phone end,
+    updated_at = case when (contact = '' and coalesce(p_contact, '') <> '') or (email = '' and coalesce(p_email, '') <> '') or (phone = '' and coalesce(p_phone, '') <> '') then now() else updated_at end
+  where id = p_license
+$$;
+-- Kurulumdaki bilgiyi bağlı (etkin) lisansa taşır.
+create or replace function lisans.sync_license_from_installation(p_machine text) returns void
+language plpgsql volatile set search_path = '' as $$
+declare
+  inst lisans.installations;
+  l lisans.licenses;
+begin
+  select * into inst from lisans.installations where machine = p_machine;
+  if inst.machine is null then return; end if;
+  for l in select * from lisans.licenses where machine = p_machine loop
+    perform lisans.fill_license(l.id, inst.contact, inst.email, inst.phone);
+  end loop;
+end $$;
+
+-- Eski imzalar (2.0.8 öncesi) kaldırılır; aksi hâlde varsayılan parametreli yeni imzayla çağrı belirsiz olur.
+drop function if exists lisans.touch(text, jsonb, text, text);
+drop function if exists lisans.ensure_installation(text, text);
+
+-- Bir kurulum kaydını oluşturur ya da görüldü bilgisini tazeler; lisanstan gelen müşteri bilgisi boş alanları doldurur.
+create or replace function lisans.touch(p_machine text, p_body jsonb, p_ip text, p_office text default '', p_contact text default '', p_email text default '', p_phone text default '') returns lisans.installations
 language plpgsql volatile set search_path = '' as $$
 declare
   inst lisans.installations;
 begin
-  insert into lisans.installations as t (machine, instance_id, version, last_ip, office_name, last_seen)
-  values (p_machine, lisans.txt(p_body, 'instanceId', 80), lisans.txt(p_body, 'version', 20), coalesce(p_ip, ''), left(coalesce(p_office, ''), 120), now())
+  insert into lisans.installations as t (machine, instance_id, version, last_ip, office_name, contact, email, phone, last_seen)
+  values (p_machine, lisans.txt(p_body, 'instanceId', 80), lisans.txt(p_body, 'version', 20), coalesce(p_ip, ''), left(coalesce(p_office, ''), 120),
+          left(coalesce(p_contact, ''), 120), left(coalesce(p_email, ''), 160), left(coalesce(p_phone, ''), 40), now())
   on conflict (machine) do update set
     last_seen = now(),
     last_ip = excluded.last_ip,
     instance_id = case when excluded.instance_id <> '' then excluded.instance_id else t.instance_id end,
     version = case when excluded.version <> '' then excluded.version else t.version end,
-    office_name = case when t.office_name = '' then excluded.office_name else t.office_name end
+    office_name = case when t.office_name = '' then excluded.office_name else t.office_name end,
+    contact = case when t.contact = '' then excluded.contact else t.contact end,
+    email = case when t.email = '' then excluded.email else t.email end,
+    phone = case when t.phone = '' then excluded.phone else t.phone end
   returning * into inst;
   return inst;
 end $$;
 
--- Operatörün lisans verdiği bilgisayar henüz kayıtlı değilse ekler (görüldü bilgisine dokunmaz).
-create or replace function lisans.ensure_installation(p_machine text, p_office text) returns void
+-- Operatörün lisans verdiği bilgisayar henüz kayıtlı değilse ekler (görüldü bilgisine dokunmaz); lisanstaki müşteri
+-- bilgisi kurulumun boş alanlarını doldurur.
+create or replace function lisans.ensure_installation(p_machine text, p_office text, p_contact text default '', p_email text default '', p_phone text default '') returns void
 language sql volatile set search_path = '' as $$
-  insert into lisans.installations as t (machine, office_name) values (p_machine, left(coalesce(p_office, ''), 120))
-  on conflict (machine) do update set office_name = case when t.office_name = '' then excluded.office_name else t.office_name end
+  insert into lisans.installations as t (machine, office_name, contact, email, phone)
+  values (p_machine, left(coalesce(p_office, ''), 120), left(coalesce(p_contact, ''), 120), left(coalesce(p_email, ''), 160), left(coalesce(p_phone, ''), 40))
+  on conflict (machine) do update set
+    office_name = case when t.office_name = '' then excluded.office_name else t.office_name end,
+    contact = case when t.contact = '' then excluded.contact else t.contact end,
+    email = case when t.email = '' then excluded.email else t.email end,
+    phone = case when t.phone = '' then excluded.phone else t.phone end
 $$;
 
 -- ---------- Program: etkinleştirme (deneme veya lisans anahtarı) ----------
@@ -372,7 +427,7 @@ begin
       perform lisans.log('license.rejected', 'servis', m, lic.id, p_ip, jsonb_build_object('reason', 'in_use', 'boundTo', lic.machine));
       return lisans.reject('LICENSE_IN_USE', 'Bu lisans başka bir bilgisayarda etkin.');
     end if;
-    perform lisans.touch(m, p_body, p_ip, lic.customer);
+    perform lisans.touch(m, p_body, p_ip, lic.customer, lic.contact, lic.email, lic.phone);
     if lic.machine is null then
       update lisans.licenses set machine = m, activated_at = now(), updated_at = now() where id = lic.id returning * into lic;
       insert into lisans.license_bindings (license_id, machine) values (lic.id, m);
@@ -424,12 +479,14 @@ begin
     returning * into inst;
     perform lisans.log('installation.contact', 'servis', m, lid, p_ip, jsonb_build_object(
       'office', inst.office_name, 'contact', inst.contact, 'email', inst.email, 'phone', inst.phone));
+    -- Programdan gelen bilgi bağlı lisansın boş alanlarını da doldurur (operatör lisans listesinde de görsün).
+    perform lisans.sync_license_from_installation(m);
   end if;
 
   select * into lic from lisans.best_license(m, lid);
   if lic.id is not null then
     if inst.machine is null then
-      inst := lisans.touch(m, p_body, p_ip, lic.customer);
+      inst := lisans.touch(m, p_body, p_ip, lic.customer, lic.contact, lic.email, lic.phone);
       update lisans.installations set last_check_at = now() where machine = m;
     end if;
     if lic.id <> lid and not exists (select 1 from lisans.events e where e.machine = m and e.license_id = lic.id
@@ -593,7 +650,7 @@ begin
   end loop;
   if m is not null then
     insert into lisans.license_bindings (license_id, machine) values (lic.id, m);
-    perform lisans.ensure_installation(m, lic.customer);
+    perform lisans.ensure_installation(m, lic.customer, lic.contact, lic.email, lic.phone);
   end if;
   perform lisans.log(case when m is null then 'license.created' else 'license.assigned' end, 'operator', m, lic.id, p_ip,
     jsonb_build_object('customer', lic.customer, 'expiresAt', lisans.iso(lic.expires_at), 'offline', lic.offline));
@@ -633,6 +690,7 @@ begin
      is distinct from (lic.customer, lic.contact, lic.email, lic.phone, lic.note, lic.message, lic.offline) then
     perform lisans.log('license.updated', 'operator', lic.machine, lic.id, p_ip, jsonb_build_object('customer', lic.customer));
   end if;
+  if lic.machine is not null then perform lisans.fill_installation(lic.machine, lic.customer, lic.contact, lic.email, lic.phone); end if;
   return jsonb_build_object('ok', true, 'license', lisans.license_json(lic));
 end $$;
 
@@ -704,7 +762,7 @@ begin
     if m is null then raise exception 'Bu lisans henüz bir bilgisayara bağlı değil. Kurulum kodunu yazın.'; end if;
     update lisans.licenses set machine = m, activated_at = now(), updated_at = now() where id = lic.id returning * into lic;
     insert into lisans.license_bindings (license_id, machine) values (lic.id, m);
-    perform lisans.ensure_installation(m, lic.customer);
+    perform lisans.ensure_installation(m, lic.customer, lic.contact, lic.email, lic.phone);
     perform lisans.log('license.assigned', 'operator', m, lic.id, p_ip, jsonb_build_object('customer', lic.customer, 'via', 'code'));
   elsif m is not null and m <> lic.machine then
     raise exception 'Bu lisans başka bir bilgisayara bağlı. Önce "Bilgisayardan ayır" ile ayırın.';
@@ -729,6 +787,7 @@ begin
   returning * into inst;
   if inst.machine is null then raise exception 'Kayıt bulunamadı.'; end if;
   perform lisans.log('installation.updated', 'operator', inst.machine, null, p_ip, '{}'::jsonb);
+  perform lisans.sync_license_from_installation(inst.machine);
   select * into l from lisans.best_license(inst.machine);
   return jsonb_build_object('ok', true, 'installation', lisans.installation_json(inst, l));
 end $$;

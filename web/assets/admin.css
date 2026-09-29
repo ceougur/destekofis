@@ -206,11 +206,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .ev .who:hover { text-decoration: underline; }
 
 /* ---------- Pencere ---------- */
-.modal-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(10, 14, 12, .55); display: grid; place-items: center; padding: 16px; overflow-y: auto; }
-.modal { width: min(640px, 100%); background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow); border: 1px solid var(--border); margin: auto; }
-.modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 20px 22px 0; }
+/* Kart ekrana sığmazsa başlık sabit kalır, gövde kartın içinde kaydırılır (görünür kaydırma çubuğu). Kart her zaman ekranda kalır. */
+.modal-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(10, 14, 12, .55); display: flex; align-items: flex-start; justify-content: center; padding: 16px; overflow-y: auto; }
+.modal { width: min(640px, 100%); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow); border: 1px solid var(--border); margin: auto; }
+.modal-head { flex: none; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 20px 22px 0; }
 .modal-head h2 { font-size: 22px; letter-spacing: -0.02em; margin-top: 2px; overflow-wrap: anywhere; }
-.modal-body { padding: 16px 22px 22px; display: flex; flex-direction: column; gap: 16px; }
+.modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 16px 22px 22px; display: flex; flex-direction: column; gap: 16px; }
+.modal-body > * { flex: none; }
+/* Kaydırma çubuğu her zaman belirgin: kullanıcı kartın devamı olduğunu görsün. */
+.modal-body { scrollbar-width: auto; scrollbar-color: color-mix(in srgb, var(--text) 38%, transparent) var(--surface-2); }
+.modal-body::-webkit-scrollbar { width: 12px; }
+.modal-body::-webkit-scrollbar-track { background: var(--surface-2); border-radius: 8px; }
+.modal-body::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text) 38%, transparent); border-radius: 8px; border: 2px solid var(--surface-2); }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; padding-top: 4px; }
 .action-grid { display: flex; flex-wrap: wrap; gap: 8px; }
 .kv { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 8px 16px; font-size: 14.5px; }
@@ -267,6 +274,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .stat { padding: 14px; }
   .stat strong { font-size: 28px; }
   .modal-backdrop { padding: 8px; }
+  .modal { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); }
   .modal-head, .modal-body { padding-left: 16px; padding-right: 16px; }
   .brand span { font-size: 15px; }
 }

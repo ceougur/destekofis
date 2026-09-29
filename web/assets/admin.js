@@ -249,6 +249,37 @@
       setTimeout(() => (first || $("#modalClose")).focus(), 20);
       return $("#modalBody");
     },
+    // Kullanıcı pencerede bir alanı değiştirdiyse (varsayılanından farklıysa) pencere "üzerinde çalışılıyor" sayılır.
+    dirty() {
+      return [...$("#modalBody").querySelectorAll("input, textarea, select")].some(element => {
+        if (element.type === "checkbox" || element.type === "radio") return element.checked !== element.defaultChecked;
+        if (element.tagName === "SELECT") {
+          const options = [...element.options];
+          const initial = Math.max(0, options.findIndex(option => option.defaultSelected));
+          return element.selectedIndex !== initial;
+        }
+        return element.value !== element.defaultValue;
+      });
+    },
+    // Sekme tuşu pencerenin içinde döner; odak arkadaki sayfaya geçmez.
+    trapFocus(event) {
+      const card = $("#modal .modal");
+      const items = [...card.querySelectorAll("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])")]
+        .filter(element => !element.hidden && !element.disabled && element.offsetParent !== null);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (!card.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    },
     close(force = false) {
       if (this.busy && !force) return;
       $("#modal").hidden = true;
@@ -258,11 +289,16 @@
     },
   };
   $("#modalClose").addEventListener("click", () => modal.close());
-  $("#modal").addEventListener("mousedown", event => {
-    if (event.target === $("#modal")) modal.close();
-  });
+  // Pencerenin dışına tıklamak pencereyi KAPATMAZ: doldurulmakta olan bir kart (lisans tanımlama gibi) yanlışlıkla kaybolmasın.
+  // Kapatma yalnızca × düğmesi, "Vazgeç" düğmeleri ve Esc iledir; Esc de üzerinde değişiklik yapılmış bir formu kapatmaz.
   document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && !$("#modal").hidden) modal.close();
+    if ($("#modal").hidden) return;
+    if (event.key === "Escape") {
+      if (modal.dirty()) return;
+      modal.close();
+    } else if (event.key === "Tab") {
+      modal.trapFocus(event);
+    }
   });
   document.addEventListener("click", event => {
     const copyButton = event.target.closest("[data-copy]");
