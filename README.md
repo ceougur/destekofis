@@ -86,6 +86,9 @@ Gizli değerler depoya ve belgelere yazılmaz. Vercel'deki gizli değerler sonra
 - **Demo:** `https://github.com/ceougur/ofis---y-netimi/releases/latest/download/DestekOfis-Kurulum.exe`. Her yeni
   sürümde GitHub Release'e kurulum dosyası **`DestekOfis-Kurulum.exe`** adıyla (sürüm numarasız) eklenir; site
   kendiliğinden en yeni sürümü indirir, siteye dokunmak gerekmez.
-- **Kullanım kılavuzu:** `web/indir/DestekOfis-Kullanim-Kilavuzu.pdf` (sitede barındırılır). Kılavuz değişince bu
-  dosya program deposundaki `client/kilavuz/DestekOfis-Kullanim-Kilavuzu.pdf` ile değiştirilir.
+- **Kullanım kılavuzu:** `web/indir/DestekOfis-Kullanim-Kilavuzu.pdf` (sitede barındırılır; GitHub yayınından
+  **gelmez**). Her sürümde bu dosya program deposundaki `client/kilavuz/DestekOfis-Kullanim-Kilavuzu.pdf` ile
+  değiştirilir ve site PR'ı birleştirilir; aksi hâlde siteden eski kılavuz iner. Neden sitede: demo indirilince kılavuz
+  yeni sekmede açılır (`web/assets/main.js`); GitHub yayın dosyası tarayıcıda açılmaz, ikinci bir indirme başlatır.
+  Son güncelleme: 2.0.15 (02.10.2026; sha256 55f06754…).
 - Demo indirilince kılavuz yeni sekmede açılır (`web/assets/main.js`).
