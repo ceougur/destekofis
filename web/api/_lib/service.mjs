@@ -1,6 +1,7 @@
 // Programın lisans istekleri: /v1/activate ve /v1/check. Protokol programdaki docs/LISANS.md ile aynıdır:
 //   istek  { product, version, machine, instanceId, kind, licenseKey?, office?, licenseId?, usage? (yalnız check) }
 //   yanıt  { ok: true, token: <imzalı zarf> }  veya  { ok: false, code, error }
+import { createHash, timingSafeEqual } from "node:crypto";
 import { ServiceError, clientIp, json, licenseKey, readJson, rpc, settings, text } from "./core.mjs";
 import { PRODUCT, normalizeLicenseKey, normalizeMachineId, signToken } from "./token.mjs";
 
@@ -80,6 +81,44 @@ export async function handleLicenseRequest(request, fn) {
   try {
     const { apiSecret, keyId } = settings();
     const result = await rpc(fn, { p_secret: apiSecret, p_body: payload, p_ip: clientIp(request) });
+    if (result.ok && result.claims) return json({ ok: true, token: signToken(result.claims, licenseKey(), keyId) });
+    if (result.ok === false && typeof result.code === "string") return reject(result.code, result.error || "İstek kabul edilmedi.", result.status || 409);
+    throw new ServiceError("Veritabanından beklenmeyen yanıt.");
+  } catch (error) {
+    return unavailable(error);
+  }
+}
+
+// ---------- Mobil kapıcı: POST /v1/kapi/durum (2.4.7 M3; program deposu docs/mobil/M3-TASARIM.md §8 madde 2) ----------
+// Kapıcı (Cloudflare Worker) ofis sunucusu kapalıyken lisansın hâlâ geçerli olduğunu buradan öğrenir.
+//   istek  başlık "authorization: Bearer <KAPI_LISANS_ANAHTARI>", gövde { licenseId, machine }
+//   yanıt  /v1/check ile AYNI: { ok: true, token: <imzalı zarf> } (engelli/taşınmış lisansta status "blocked") ya da { ok: false, code, error }
+// Anahtar Vercel ortam değişkeni KAPI_LISANS_ANAHTARI'dır (kapıcının `wrangler secret`'ıyla aynı değer). Tanımlı değilse ya da
+// 32 karakterden kısaysa uç her isteği reddeder (kapalı varsayılan). Karşılaştırma sabit zamanlıdır (iki değerin SHA-256 özeti
+// timingSafeEqual ile; uzunluk farkı da sızmaz). Veritabanında lisans.kapi_durum_impl salt okurdur: kurulum kaydı, hareketler,
+// e-Belge kullanımı ve Altyapı sayacı değişmez.
+export const KAPI_KEY_MIN = 32;
+const KAPI_BODY_LIMIT = 1_024;
+const LICENSE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$/;
+const digest = value => createHash("sha256").update(value, "utf8").digest();
+
+export function kapiAuthorized(request) {
+  const expected = String(process.env.KAPI_LISANS_ANAHTARI || "").trim();
+  if (expected.length < KAPI_KEY_MIN) return false;
+  const match = /^Bearer[ ]+(\S+)$/.exec(String(request.headers.get("authorization") || "").trim());
+  const given = match ? match[1] : "";
+  // Uzunluk ve içerik her durumda aynı işle karşılaştırılır (boş başlık da özetlenir).
+  return timingSafeEqual(digest(given), digest(expected)) && given.length > 0;
+}
+
+export async function handleKapiRequest(request) {
+  if (!kapiAuthorized(request)) return reject("UNAUTHORIZED", "Yetkisiz istek.", 401);
+  const body = await readJson(request, KAPI_BODY_LIMIT).catch(() => null);
+  const machine = normalizeMachineId(body?.machine);
+  if (!body || !machine || typeof body.licenseId !== "string" || !LICENSE_ID.test(body.licenseId)) return reject("BAD_REQUEST", "Geçersiz istek.", 400);
+  try {
+    const { apiSecret, keyId } = settings();
+    const result = await rpc("lisans_kapi_durum", { p_secret: apiSecret, p_body: { product: PRODUCT, machine, licenseId: body.licenseId } });
     if (result.ok && result.claims) return json({ ok: true, token: signToken(result.claims, licenseKey(), keyId) });
     if (result.ok === false && typeof result.code === "string") return reject(result.code, result.error || "İstek kabul edilmedi.", result.status || 409);
     throw new ServiceError("Veritabanından beklenmeyen yanıt.");
