@@ -17,6 +17,7 @@
     installations: null,
     licenses: null,
     filters: { kullananlar: "all", lisanslar: "all", hareketler: "all" },
+    edoc: { env: "live", month: "" }, // e-Belge Kullanımı: ortam (varsayılan Canlı) ve ay ("" = Tüm Aylar)
     search: { kullananlar: "", lisanslar: "" },
     infra: null, // Altyapı limitleri: { at, data } — 10 dakika önbellek (her sayfa açılışında sunucuya gidilmez)
   };
@@ -99,6 +100,20 @@
         return { tone: "muted", text: license.state };
     }
   }
+  // 2.4.7 M2: program başına en çok eşli uzaktan cihaz (telefon, tablet, uzak tarayıcı; iki şirket birlikte). Varsayılan 3, 0–100.
+  // Veritabanı da aynı sınırı denetler (lisans.mobile_devices_of); program yeni sınırı bir sonraki doğrulamada alır.
+  const MOBILE_DEFAULT = 3;
+  const MOBILE_ERROR = "Mobil cihaz sınırı 0 ile 100 arasında bir tam sayı olmalı.";
+  const mobileText = license => `${license.mobileDevices ?? MOBILE_DEFAULT} mobil cihaz`;
+  function mobileValue(raw) {
+    const text = String(raw ?? "").trim();
+    if (!/^\d{1,3}$/.test(text)) return null;
+    const number = Number(text);
+    return number <= 100 ? number : null;
+  }
+  const mobileField = current =>
+    `<label class="field"><span>Mobil Cihaz Sınırı</span><input name="mobileDevices" type="number" inputmode="numeric" min="0" max="100" step="1" value="${esc(String(current))}"><small>Telefon, tablet ve uzaktaki bilgisayar sayılır (iki şirket birlikte). 0: yeni cihaz eşlenemez. Program yeni sınırı bir sonraki doğrulamada alır.</small></label>`;
+
   const expiryText = license => (license.expiresAt ? `${fmtDate(license.expiresAt)}${license.daysLeft != null && license.state !== "expired" ? ` (${license.daysLeft} gün)` : ""}` : "Süresiz");
 
   const EVENTS = {
@@ -117,6 +132,7 @@
     "license.rejected": event => ({ blocked: "Engelli lisans denendi", expired: "Süresi dolmuş lisans denendi", in_use: "Başka bilgisayardaki lisans denendi" })[event.detail?.reason] || "Lisans reddedildi",
     "license.extended": event => `Lisans bitişi değiştirildi: ${event.detail?.to ? fmtDate(event.detail.to) : "süresiz"}`,
     "license.updated": "Lisans bilgileri düzenlendi",
+    "license.mobile_devices": event => `Mobil cihaz sınırı değiştirildi: ${event.detail?.from ?? "—"} → ${event.detail?.to ?? "—"}`,
     "license.blocked": "Lisans engellendi",
     "license.unblocked": "Lisans engeli kaldırıldı",
     "license.released": "Lisans bilgisayardan ayrıldı (taşıma)",
@@ -477,7 +493,7 @@
   });
 
   // ---------- Yönlendirme ----------
-  const VIEWS = { ozet: renderOverview, kullananlar: renderInstallations, lisanslar: renderLicenses, hareketler: renderEvents, ayarlar: renderSettings };
+  const VIEWS = { ozet: renderOverview, kullananlar: renderInstallations, lisanslar: renderLicenses, ebelge: renderEdocUsage, hareketler: renderEvents, ayarlar: renderSettings };
   const currentView = () => {
     const view = location.hash.slice(1);
     return VIEWS[view] ? view : "ozet";
@@ -837,7 +853,7 @@
     const where = license.machine ? `${esc(license.installation?.officeName || "Bilgisayar")}<span class="sub mono">${esc(installCode(license.machine))}</span>` : '<span class="sub">Henüz bir bilgisayara bağlı değil</span>';
     return `<button class="row" type="button" data-act="open-license" data-id="${esc(license.id)}">
       <div><b>${esc(license.customer)}</b><span class="sub">${esc([license.contact, license.phone].filter(Boolean).join(" · ") || "—")}</span></div>
-      <div><b class="mono">${esc(license.key)}</b><span class="sub">${license.offline ? "İnternetsiz lisans" : "İnternetli lisans"}</span></div>
+      <div><b class="mono">${esc(license.key)}</b><span class="sub">${license.offline ? "İnternetsiz lisans" : "İnternetli lisans"} · ${esc(mobileText(license))}</span></div>
       <div><span class="pill ${status.tone}">${esc(status.text)}</span><span class="sub">Bitiş: ${esc(expiryText(license))}</span></div>
       <div><b>${where}</b></div>
     </button>`;
@@ -897,6 +913,7 @@
         <dl class="kv">
           <dt>Bitiş</dt><dd>${esc(expiryText(license))}</dd>
           <dt>Tür</dt><dd>${license.offline ? "İnternetsiz (kodla açılır, uzaktan engellenemez)" : "İnternetli (program 12 saatte bir doğrular)"}</dd>
+          <dt>Mobil Cihaz Sınırı</dt><dd>${esc(mobileText(license))}</dd>
           <dt>Bilgisayar</dt><dd>${license.machine ? `${esc(license.installation?.officeName || "—")} · <span class="mono">${esc(installCode(license.machine))}</span>` : "Henüz bir bilgisayara bağlı değil"}</dd>
           ${license.activatedAt ? `<dt>Bağlandığı tarih</dt><dd>${esc(fmtDateTime(license.activatedAt))}</dd>` : ""}
           ${license.installation?.lastSeen ? `<dt>Son bağlantı</dt><dd>${esc(ago(license.installation.lastSeen))}</dd>` : ""}
@@ -1053,6 +1070,7 @@
         <label class="field"><span>Telefon</span><input name="phone" type="tel" maxlength="40" value="${esc(license.phone)}"></label>
         <label class="field wide"><span>E-posta</span><input name="email" type="email" maxlength="160" value="${esc(license.email)}"></label>
         <label class="check wide"><input type="checkbox" name="offline"${license.offline ? " checked" : ""}><span><b>İnternetsiz lisans</b><small>Sunucu bilgisayar internete hiç bağlanmıyorsa işaretleyin. Değişiklik programa yeni bir internetsiz kodla ulaşır.</small></span></label>
+        ${mobileField(license.mobileDevices ?? MOBILE_DEFAULT)}
         <label class="field wide"><span>Not (yalnızca siz görürsünüz)</span><textarea name="note" maxlength="500" rows="3">${esc(license.note)}</textarea></label>
         <p class="form-error wide" data-error></p>
         <div class="modal-actions wide"><button type="button" class="btn btn-ghost" data-close>Vazgeç</button><button type="submit" class="btn btn-primary">Kaydet</button></div>
@@ -1066,7 +1084,13 @@
         $("[data-error]", form).textContent = "Müşteri / ofis adını yazın.";
         return;
       }
-      const done = await run($("button[type=submit]", form), () => api("update_license", { id: license.id, customer: value("customer"), contact: value("contact"), phone: value("phone"), email: value("email"), note: value("note"), offline: form.elements.namedItem("offline").checked }), $("[data-error]", form));
+      const mobileDevices = mobileValue(value("mobileDevices"));
+      if (mobileDevices == null) {
+        $("[data-error]", form).textContent = MOBILE_ERROR;
+        form.elements.namedItem("mobileDevices").focus();
+        return;
+      }
+      const done = await run($("button[type=submit]", form), () => api("update_license", { id: license.id, customer: value("customer"), contact: value("contact"), phone: value("phone"), email: value("email"), note: value("note"), offline: form.elements.namedItem("offline").checked, mobileDevices }), $("[data-error]", form));
       if (done) afterLicenseChange(license.id, "Bilgiler kaydedildi.");
     });
   }
@@ -1131,6 +1155,7 @@
               <input name="machine" class="mono" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" aria-label="Kurulum kodu"${bindToCode ? "" : " hidden"}>
             </div>`}
         <label class="check wide"><input type="checkbox" name="offline"><span><b>İnternetsiz lisans</b><small>Yalnızca sunucu bilgisayar internete hiç bağlanmıyorsa işaretleyin. Programa anahtarla değil, internetsiz kodla girilir ve uzaktan engellenemez.</small></span></label>
+        ${mobileField(MOBILE_DEFAULT)}
         <label class="field wide"><span>Not (yalnızca siz görürsünüz)</span><textarea name="note" maxlength="500" rows="2"></textarea></label>
         <p class="form-error wide" data-error></p>
         <div class="modal-actions wide"><button type="button" class="btn btn-ghost" data-close>Vazgeç</button><button type="submit" class="btn btn-primary">${fixed ? "Lisansı ver" : "Lisansı oluştur"}</button></div>
@@ -1175,6 +1200,12 @@
           return;
         }
       }
+      const mobileDevices = mobileValue(field("mobileDevices").value);
+      if (mobileDevices == null) {
+        error.textContent = MOBILE_ERROR;
+        field("mobileDevices").focus();
+        return;
+      }
       const result = await run($("button[type=submit]", form), () => api("create_license", {
         customer,
         contact: field("contact").value.trim(),
@@ -1183,6 +1214,7 @@
         note: field("note").value.trim(),
         expiresAt: term.value,
         offline: field("offline").checked,
+        mobileDevices,
         machine,
       }), error);
       if (!result) return;
@@ -1217,6 +1249,62 @@
       const action = event.target.closest("[data-do]")?.dataset.do;
       if (action === "open") openLicense(license.id);
       else if (action === "code") offlineCode(license);
+    });
+  }
+
+  // ---------- e-Belge Kullanımı (EDM iş ortaklığı) ----------
+  // Program her lisans doğrulamasında son 3 ayın ay × ortam başına TOPLAM e-Belge sayılarını gönderir (belge içeriği gelmez).
+  // Ay sonunda EDM'nin raporuyla karşılaştırmak için: ofis × ay, e-Fatura / e-Arşiv / e-SMM / Toplam ve alt TOPLAM satırı.
+  const EDOC_ENVS = [["live", "Canlı"], ["test", "Test"]];
+  const monthFormat = new Intl.DateTimeFormat("tr-TR", { timeZone: "UTC", month: "long", year: "numeric" });
+  const fmtMonth = ym => {
+    const [y, m] = String(ym || "").split("-").map(Number);
+    if (!y || !m) return "—";
+    const text = monthFormat.format(new Date(Date.UTC(y, m - 1, 1)));
+    return text.charAt(0).toLocaleUpperCase("tr-TR") + text.slice(1);
+  };
+  function edocTableHtml(items) {
+    const sum = key => items.reduce((total, item) => total + (Number(item[key]) || 0), 0);
+    const num = value => `<td class="num">${esc(fmtInt(value))}</td>`;
+    const body = items.map(item => `<tr>
+        <td><b>${esc(item.officeName || "Adı Yazılmamış Ofis")}</b><span class="sub mono">${esc(installCode(item.machine))}</span></td>
+        <td>${esc(fmtMonth(item.month))}</td>
+        ${num(item.efatura)}${num(item.earsiv)}${num(item.esmm)}<td class="num"><b>${esc(fmtInt(item.total))}</b></td>
+        <td><span class="sub">${esc(fmtDateTime(item.updatedAt))}</span><span class="sub">${item.version ? `Sürüm ${esc(item.version)}` : ""}</span></td>
+      </tr>`).join("");
+    return `<div class="table-wrap"><table class="usage-table">
+      <thead><tr><th>Ofis</th><th>Ay</th><th class="num">e-Fatura</th><th class="num">e-Arşiv</th><th class="num">e-SMM</th><th class="num">Toplam</th><th>Son Bildirim</th></tr></thead>
+      <tbody>${body}</tbody>
+      <tfoot><tr><td>TOPLAM</td><td>${esc(fmtInt(items.length))} satır</td>${num(sum("efatura"))}${num(sum("earsiv"))}${num(sum("esmm"))}<td class="num"><b>${esc(fmtInt(sum("total")))}</b></td><td></td></tr></tfoot>
+    </table></div>`;
+  }
+  async function renderEdocUsage(content, current) {
+    const { env, month } = state.edoc;
+    const data = await api("edoc_usage", { env, month: month || null });
+    if (!current()) return;
+    const months = Array.isArray(data.months) ? data.months : [];
+    const items = Array.isArray(data.items) ? data.items : [];
+    content.innerHTML = `
+      <div class="page-head"><div><h1>e-Belge Kullanımı</h1><p>Ofislerin EDM'ye gönderdiği e-Fatura, e-Arşiv ve e-SMM adetleri (ay ve tür bazında sayı; belge içeriği gelmez). Program her lisans doğrulamasında son 3 ayın toplamını yeniden bildirir. Ay sonunda EDM'nin raporuyla karşılaştırın.</p></div></div>
+      <div class="toolbar">
+        <div class="chips" role="group" aria-label="Ortam">${EDOC_ENVS.map(([key, label]) => `<button type="button" class="chip${key === data.env ? " on" : ""}" data-edoc-env="${key}">${esc(label)}</button>`).join("")}</div>
+        <label class="field field-inline"><span>Ay</span><select id="edocMonth" aria-label="Ay">
+          <option value="">Tüm Aylar</option>
+          ${months.map(ym => `<option value="${esc(ym)}"${ym === data.month ? " selected" : ""}>${esc(fmtMonth(ym))}</option>`).join("")}
+        </select></label>
+      </div>
+      ${items.length ? edocTableHtml(items) : `<div class="empty">${months.length ? "Bu ay için bildirim yok." : `${data.env === "test" ? "Test" : "Canlı"} ortamında henüz e-Belge kullanımı bildirilmedi. Bildirim 2.4.7 ve sonraki sürümlerden, lisans doğrulamasıyla gelir.`}</div>`}
+      <p class="muted infra-foot">Sayılar programın bildirdiği toplamlardır; EDM'nin kabul ettiği gönderimler sayılır (yeniden deneme, durum sorgusu ve iptal sayıyı artırmaz). EDM portalından doğrudan kesilen belgeler ve 2.4.7 öncesi sürümler bildirilmez.</p>`;
+    $$("[data-edoc-env]", content).forEach(chip =>
+      chip.addEventListener("click", () => {
+        if (state.edoc.env === chip.dataset.edocEnv) return;
+        state.edoc = { env: chip.dataset.edocEnv, month: "" };
+        refreshView();
+      }),
+    );
+    $("#edocMonth", content).addEventListener("change", event => {
+      state.edoc.month = event.target.value;
+      refreshView();
     });
   }
 

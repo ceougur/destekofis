@@ -67,6 +67,9 @@ export function normalizeClaims(value) {
     expiresAt,
     offline: value.offline === true,
     message: typeof value.message === "string" ? value.message.trim().slice(0, 300) : "",
+    // 2.4.7 M2: program başına en çok eşli uzaktan cihaz (lisans.licenses.mobile_devices). Programdaki kuralın AYNISI: yalnız 0–100
+    // tam sayı iddiaya girer, aksi hâlde alan hiç yazılmaz (program 3 sayar); eski program bu alanı yok sayar.
+    ...(Number.isInteger(value.mobileDevices) && value.mobileDevices >= 0 && value.mobileDevices <= 100 ? { mobileDevices: value.mobileDevices } : {}),
   };
 }
 

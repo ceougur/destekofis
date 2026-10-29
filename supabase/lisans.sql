@@ -1,7 +1,8 @@
 -- DestekOfis lisans servisi — veritabanı (Supabase, PostgreSQL 15+).
 --
--- Tablolar "lisans" şemasındadır ve API'ye (PostgREST) açık değildir. Dışarıdan yalnızca public şemadaki üç fonksiyon
--- çağrılabilir: lisans_activate ve lisans_check (programın istekleri), lisans_operator (operatör merkezi). Üçü de
+-- Tablolar "lisans" şemasındadır ve API'ye (PostgREST) açık değildir. Dışarıdan yalnızca public şemadaki dört fonksiyon
+-- çağrılabilir: lisans_activate ve lisans_check (programın istekleri), lisans_kapi_durum (mobil kapıcı; salt okur, 2.4.7),
+-- lisans_operator (operatör merkezi). Dördü de
 -- SECURITY DEFINER çalışır ve ilk parametre olarak API sırrını ister. Sır yalnızca Vercel'deki lisans API'sinde
 -- (DESTEKOFIS_API_SECRET) durur; burada SHA-256 özeti saklanır. Operatör parolası bcrypt özetidir; oturumlar sunucu
 -- tarafında tutulur (tarayıcı çerezinde yalnızca rastgele belirteç vardır, burada onun özeti).
@@ -61,6 +62,11 @@ create table if not exists lisans.licenses (
   updated_at timestamptz not null default now()
 );
 create index if not exists licenses_machine_idx on lisans.licenses (machine) where machine is not null;
+-- 2.4.7 M2 (kullanıcı kararı 26.10.2026): program başına (iki şirket birlikte) en çok eşli uzaktan cihaz (telefon, tablet,
+-- uzak tarayıcı). Lisans belirtecine "mobileDevices" olarak girer; program ve kapıcı bu sınırı uygular. Göç: eski
+-- veritabanında sütun eklenir, mevcut lisanslar 3 alır; yeniden koşulabilir (sütun varsa dokunulmaz).
+alter table lisans.licenses add column if not exists mobile_devices integer not null default 3
+  constraint licenses_mobile_devices_check check (mobile_devices between 0 and 100);
 
 -- Lisansın hangi bilgisayarlara bağlandığının geçmişi (taşınan lisansın eski bilgisayarına durdurma bildirmek için).
 create table if not exists lisans.license_bindings (
@@ -97,6 +103,25 @@ create table if not exists lisans.usage_daily (
 );
 create index if not exists events_ip_idx on lisans.events (ip, type, at desc);
 
+-- e-Belge kullanımı (2.4.7, EDM iş ortaklığı; operatör merkezi › e-Belge Kullanımı): program her doğrulamada (/v1/check)
+-- son 3 ayın (bu ay + önceki 2) ay × ortam başına TOPLAM sayılarını gönderir (usage.edoc). Belge içeriği, alıcı, tutar,
+-- VKN/TCKN, belge no ve ETTN GELMEZ. Satır (kurulum, ay, ortam) başınadır ve her doğrulamada baştan yazılır (geç kesinleşen
+-- gönderim bir sonraki doğrulamada düzelir). Geçersiz satır yok sayılır; kayıt hatası lisans yanıtını ASLA bozmaz.
+create table if not exists lisans.edoc_usage (
+  machine text not null references lisans.installations (machine) on delete cascade,
+  month text not null check (month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  env text not null check (env in ('test', 'live')),
+  efatura integer not null default 0 check (efatura between 0 and 1000000),
+  earsiv integer not null default 0 check (earsiv between 0 and 1000000),
+  esmm integer not null default 0 check (esmm between 0 and 1000000),
+  license_id text not null default '',
+  version text not null default '',
+  first_reported_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (machine, month, env)
+);
+create index if not exists edoc_usage_month_idx on lisans.edoc_usage (env, month);
+
 create table if not exists lisans.sessions (
   token_hash text primary key,
   created_at timestamptz not null default now(),
@@ -112,6 +137,7 @@ alter table lisans.licenses enable row level security;
 alter table lisans.license_bindings enable row level security;
 alter table lisans.events enable row level security;
 alter table lisans.sessions enable row level security;
+alter table lisans.edoc_usage enable row level security;
 revoke all on all tables in schema lisans from public;
 revoke all on all sequences in schema lisans from public;
 
@@ -162,6 +188,26 @@ exception when others then
   raise exception 'Tarih okunamadı: %', p;
 end $$;
 
+-- Operatörün yazdığı mobil cihaz sınırı: 0–100 tam sayı (JSON sayı ya da rakam dizgesi). Alan yoksa / null ise p_default.
+-- Sınır dışı, kesirli ya da sayı olmayan değer reddedilir (sessizce kırpılmaz).
+create or replace function lisans.mobile_devices_of(p_args jsonb, p_default int) returns int
+language plpgsql immutable set search_path = '' as $$
+declare
+  v jsonb := p_args -> 'mobileDevices';
+  n numeric;
+begin
+  if v is null or jsonb_typeof(v) = 'null' then return p_default; end if;
+  if jsonb_typeof(v) = 'number' then
+    n := (v #>> '{}')::numeric;
+  elsif jsonb_typeof(v) = 'string' and btrim(v #>> '{}') ~ '^[0-9]{1,3}$' then
+    n := btrim(v #>> '{}')::numeric;
+  end if;
+  if n is null or n <> trunc(n) or n < 0 or n > 100 then
+    raise exception 'Mobil cihaz sınırı 0 ile 100 arasında bir tam sayı olmalı.';
+  end if;
+  return n::int;
+end $$;
+
 create or replace function lisans.new_id(p_prefix text) returns text
 language sql volatile set search_path = '' as $$
   select p_prefix || '-' || to_char(now() at time zone 'UTC', 'YYYYMMDD') || '-' || upper(encode(extensions.gen_random_bytes(4), 'hex'))
@@ -195,6 +241,59 @@ language sql volatile set search_path = '' as $$
   on conflict (day, source) do update set requests = t.requests + 1, bytes_out = t.bytes_out + excluded.bytes_out
 $$;
 
+-- e-Belge kullanım sayısı: JSON tam sayı, 0 ile 1.000.000 arası; değilse null (satır yok sayılır).
+create or replace function lisans.edoc_count(p jsonb) returns integer
+language plpgsql immutable set search_path = '' as $$
+declare
+  n numeric;
+begin
+  if p is null or jsonb_typeof(p) <> 'number' then return null; end if;
+  n := (p #>> '{}')::numeric;
+  if n < 0 or n > 1000000 or n <> trunc(n) then return null; end if;
+  return n::integer;
+end $$;
+
+-- Doğrulama isteğindeki usage.edoc satırlarını (kurulum, ay, ortam) başına üzerine yazar; yazılan satır sayısını döndürür.
+-- Kabul: usage nesne, edoc dizi ve en çok 12 eleman (fazlası: hepsi yok sayılır); her satırda ay "YYYY-MM" ve
+-- [bu ay − 3, bu ay + 1] aralığında (UTC; Türkiye saati ve küçük saat kaymaları için pay), ortam test/live, üç sayı geçerli.
+-- Aynı (ay, ortam) iki kez gelirse ilki alınır. Kurulum kaydı yoksa hiçbir şey yazılmaz.
+create or replace function lisans.record_edoc_usage(p_machine text, p_body jsonb) returns integer
+language plpgsql volatile set search_path = '' as $$
+declare
+  items jsonb := p_body -> 'usage' -> 'edoc';
+  cur date := date_trunc('month', now() at time zone 'UTC')::date;
+  lo text := to_char(cur - interval '3 month', 'YYYY-MM');
+  hi text := to_char(cur + interval '1 month', 'YYYY-MM');
+  n integer := 0;
+begin
+  if p_machine is null or jsonb_typeof(p_body -> 'usage') is distinct from 'object' or jsonb_typeof(items) is distinct from 'array' then
+    return 0;
+  end if;
+  if jsonb_array_length(items) > 12 then return 0; end if;
+  if not exists (select 1 from lisans.installations i where i.machine = p_machine) then return 0; end if;
+  insert into lisans.edoc_usage as t (machine, month, env, efatura, earsiv, esmm, license_id, version)
+  select distinct on (x.month, x.env) p_machine, x.month, x.env, x.efatura, x.earsiv, x.esmm,
+         lisans.txt(p_body, 'licenseId', 64), lisans.txt(p_body, 'version', 20)
+  from (
+    select e.ord,
+           case when jsonb_typeof(e.v -> 'month') = 'string' then e.v ->> 'month' end as month,
+           case when jsonb_typeof(e.v -> 'env') = 'string' then e.v ->> 'env' end as env,
+           lisans.edoc_count(e.v -> 'efatura') as efatura,
+           lisans.edoc_count(e.v -> 'earsiv') as earsiv,
+           lisans.edoc_count(e.v -> 'esmm') as esmm
+    from jsonb_array_elements(items) with ordinality as e(v, ord)
+    where jsonb_typeof(e.v) = 'object'
+  ) x
+  where x.month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$' and x.month between lo and hi and x.env in ('test', 'live')
+    and x.efatura is not null and x.earsiv is not null and x.esmm is not null
+  order by x.month, x.env, x.ord
+  on conflict (machine, month, env) do update set
+    efatura = excluded.efatura, earsiv = excluded.earsiv, esmm = excluded.esmm,
+    license_id = excluded.license_id, version = excluded.version, updated_at = now();
+  get diagnostics n = row_count;
+  return n;
+end $$;
+
 -- Bir bilgisayara bağlı lisanslardan geçerli olanı (yoksa en son olanı) seçer; p_prefer istenen lisanstır.
 create or replace function lisans.best_license(p_machine text, p_prefer text default null) returns setof lisans.licenses
 language sql stable set search_path = '' as $$
@@ -213,7 +312,9 @@ language sql stable set search_path = '' as $$
     'schema', 1, 'product', 'DestekOfis', 'type', 'license-token', 'kind', 'trial',
     'status', i.trial_status, 'licenseId', i.trial_id, 'customer', left(i.office_name, 120), 'machine', i.machine,
     'issuedAt', lisans.iso(now()), 'startsAt', lisans.iso(i.trial_started_at), 'expiresAt', lisans.iso(i.trial_expires_at),
-    'offline', false, 'message', left(i.trial_message, 300))
+    'offline', false, 'message', left(i.trial_message, 300),
+    -- Denemede sınır sabittir (lisanstaki varsayılanla aynı).
+    'mobileDevices', 3)
 $$;
 
 create or replace function lisans.license_claims(l lisans.licenses, p_machine text default null, p_status text default null, p_message text default null) returns jsonb
@@ -223,7 +324,8 @@ language sql stable set search_path = '' as $$
     'status', coalesce(p_status, l.status), 'licenseId', l.id, 'customer', left(l.customer, 120),
     'machine', coalesce(p_machine, l.machine), 'issuedAt', lisans.iso(now()),
     'startsAt', lisans.iso(coalesce(l.activated_at, l.created_at)), 'expiresAt', lisans.iso(l.expires_at),
-    'offline', l.offline, 'message', left(coalesce(p_message, l.message), 300))
+    'offline', l.offline, 'message', left(coalesce(p_message, l.message), 300),
+    'mobileDevices', l.mobile_devices)
 $$;
 
 create or replace function lisans.days_left(p timestamptz) returns int
@@ -251,7 +353,7 @@ language sql stable set search_path = '' as $$
   select jsonb_build_object(
     'id', l.id, 'key', l.key, 'customer', l.customer, 'contact', l.contact, 'email', l.email, 'phone', l.phone,
     'note', l.note, 'status', l.status, 'message', l.message, 'expiresAt', lisans.iso(l.expires_at), 'offline', l.offline,
-    'machine', l.machine, 'activatedAt', lisans.iso(l.activated_at), 'createdAt', lisans.iso(l.created_at),
+    'mobileDevices', l.mobile_devices, 'machine', l.machine, 'activatedAt', lisans.iso(l.activated_at), 'createdAt', lisans.iso(l.created_at),
     'updatedAt', lisans.iso(l.updated_at), 'daysLeft', lisans.days_left(l.expires_at),
     'state', case when l.status = 'blocked' then 'blocked'
                   when l.expires_at is not null and l.expires_at <= now() then 'expired'
@@ -551,9 +653,66 @@ declare
   r jsonb;
 begin
   r := lisans.check_impl(p_secret, p_body, p_ip);
+  -- e-Belge kullanımı yalnız kabul edilen doğrulamada yazılır; ayrı alt işlemdedir: hata olursa yalnız bu kayıt geri alınır,
+  -- lisans yanıtı (r) değişmez.
+  if r ->> 'ok' = 'true' then
+    begin
+      perform lisans.record_edoc_usage(lisans.machine_of(p_body ->> 'machine'), p_body);
+    exception when others then
+      raise warning 'e-Belge kullanımı yazılamadı: %', sqlerrm;
+    end;
+  end if;
   perform lisans.count_usage('program', r);
   return r;
 end $$;
+
+-- ---------- Mobil kapıcı: lisans durumu (2.4.7 M3; program deposu docs/mobil/M3-TASARIM.md §8 madde 2) ----------
+-- Kapıcı (Cloudflare Worker) ofis sunucusu kapalıyken de lisansın hâlâ geçerli olduğunu öğrenmek için sorar. Karar
+-- lisans.check_impl ile AYNIDIR (bağlı geçerli lisans → o; yoksa deneme; taşınmış lisans → "blocked"; hiçbiri → LICENSE_NOT_FOUND),
+-- ama hiçbir şey YAZMAZ: son görülme, son doğrulama, IP, sürüm, kurulum kaydı, hareket (license.delivered / stop_sent /
+-- check.unknown), e-Belge kullanımı ve Altyapı sayacı (usage_daily) değişmez — ofis kapalıyken "çevrimiçi" görünmesin.
+-- STABLE: PostgreSQL bu işlevde (ve çağırdıklarında) INSERT/UPDATE/DELETE'i reddeder; salt okurluk böylece motorca da güvencelidir.
+-- check_impl'in karar kısmı değişirse bu da değişmeli (test: test/sql/kapi-durum.sql her dalı lisans_check ile karşılaştırır).
+create or replace function lisans.kapi_durum_impl(p_secret text, p_body jsonb) returns jsonb
+language plpgsql stable set search_path = '' as $$
+declare
+  m text;
+  lid text;
+  inst lisans.installations;
+  lic lisans.licenses;
+begin
+  if not lisans.authorized(p_secret) then
+    return lisans.reject('UNAUTHORIZED', 'Yetkisiz istek.', 401);
+  end if;
+  m := lisans.machine_of(p_body ->> 'machine');
+  lid := p_body ->> 'licenseId';
+  if p_body ->> 'product' is distinct from 'DestekOfis' or m is null or lid is null or lid = '' then
+    return lisans.reject('BAD_REQUEST', 'Geçersiz istek.', 400);
+  end if;
+
+  select * into lic from lisans.best_license(m, lid);
+  if lic.id is not null then
+    return jsonb_build_object('ok', true, 'claims', lisans.license_claims(lic));
+  end if;
+
+  select * into inst from lisans.installations where machine = m;
+  if inst.trial_id is not null and inst.trial_id = lid then
+    return jsonb_build_object('ok', true, 'claims', lisans.trial_claims(inst));
+  end if;
+
+  select * into lic from lisans.licenses where id = lid;
+  if lic.id is not null and exists (select 1 from lisans.license_bindings b where b.license_id = lid and b.machine = m) then
+    return jsonb_build_object('ok', true, 'claims', lisans.license_claims(lic, m, 'blocked',
+      'Bu lisans bu bilgisayardan kaldırıldı (başka bir bilgisayara taşındı).'));
+  end if;
+
+  return lisans.reject('LICENSE_NOT_FOUND', 'Lisans bulunamadı.');
+end $$;
+
+create or replace function public.lisans_kapi_durum(p_secret text, p_body jsonb) returns jsonb
+language sql stable security definer set search_path = '' as $$
+  select lisans.kapi_durum_impl(p_secret, p_body)
+$$;
 
 -- ---------- Operatör işlemleri ----------
 create or replace function lisans.op_login(p_password text, p_ip text) returns jsonb
@@ -661,10 +820,12 @@ declare
   exp timestamptz;
   lic lisans.licenses;
   attempt int := 0;
+  md int;
 begin
   if lisans.txt(p_args, 'customer', 120) = '' then
     raise exception 'Müşteri (ofis) adı gerekli.';
   end if;
+  md := lisans.mobile_devices_of(p_args, 3);
   exp := lisans.time_of(p_args ->> 'expiresAt');
   if exp is not null and exp <= now() then
     raise exception 'Bitiş tarihi bugünden sonra olmalı.';
@@ -678,10 +839,10 @@ begin
   loop
     attempt := attempt + 1;
     begin
-      insert into lisans.licenses (id, key, customer, contact, email, phone, note, expires_at, offline, machine, activated_at)
+      insert into lisans.licenses (id, key, customer, contact, email, phone, note, expires_at, offline, mobile_devices, machine, activated_at)
       values (lisans.new_id('LIS'), lisans.new_key(), lisans.txt(p_args, 'customer', 120), lisans.txt(p_args, 'contact', 120),
               lisans.txt(p_args, 'email', 160), lisans.txt(p_args, 'phone', 40), lisans.txt(p_args, 'note', 500), exp,
-              coalesce((p_args ->> 'offline')::boolean, false), m, case when m is not null then now() end)
+              coalesce((p_args ->> 'offline')::boolean, false), md, m, case when m is not null then now() end)
       returning * into lic;
       exit;
     exception when unique_violation then
@@ -693,7 +854,7 @@ begin
     perform lisans.ensure_installation(m, lic.customer, lic.contact, lic.email, lic.phone);
   end if;
   perform lisans.log(case when m is null then 'license.created' else 'license.assigned' end, 'operator', m, lic.id, p_ip,
-    jsonb_build_object('customer', lic.customer, 'expiresAt', lisans.iso(lic.expires_at), 'offline', lic.offline));
+    jsonb_build_object('customer', lic.customer, 'expiresAt', lisans.iso(lic.expires_at), 'offline', lic.offline, 'mobileDevices', lic.mobile_devices));
   return jsonb_build_object('ok', true, 'license', lisans.license_json(lic));
 end $$;
 
@@ -703,9 +864,11 @@ declare
   old lisans.licenses;
   lic lisans.licenses;
   exp timestamptz;
+  md int;
 begin
   select * into old from lisans.licenses where id = p_args ->> 'id' for update;
   if old.id is null then raise exception 'Lisans bulunamadı.'; end if;
+  md := lisans.mobile_devices_of(p_args, old.mobile_devices);
   exp := case when p_args ? 'expiresAt' then lisans.time_of(p_args ->> 'expiresAt') else old.expires_at end;
   if p_args ? 'customer' and lisans.txt(p_args, 'customer', 120) = '' then
     raise exception 'Müşteri (ofis) adı boş olamaz.';
@@ -718,6 +881,7 @@ begin
     note = case when p_args ? 'note' then lisans.txt(p_args, 'note', 500) else note end,
     message = case when p_args ? 'message' then lisans.txt(p_args, 'message', 300) else message end,
     offline = case when p_args ? 'offline' then coalesce((p_args ->> 'offline')::boolean, false) else offline end,
+    mobile_devices = md,
     expires_at = exp,
     updated_at = now()
   where id = old.id
@@ -729,6 +893,10 @@ begin
   if (old.customer, old.contact, old.email, old.phone, old.note, old.message, old.offline)
      is distinct from (lic.customer, lic.contact, lic.email, lic.phone, lic.note, lic.message, lic.offline) then
     perform lisans.log('license.updated', 'operator', lic.machine, lic.id, p_ip, jsonb_build_object('customer', lic.customer));
+  end if;
+  if old.mobile_devices is distinct from lic.mobile_devices then
+    perform lisans.log('license.mobile_devices', 'operator', lic.machine, lic.id, p_ip,
+      jsonb_build_object('from', old.mobile_devices, 'to', lic.mobile_devices));
   end if;
   if lic.machine is not null then perform lisans.fill_installation(lic.machine, lic.customer, lic.contact, lic.email, lic.phone); end if;
   return jsonb_build_object('ok', true, 'license', lisans.license_json(lic));
@@ -989,6 +1157,31 @@ begin
       from lisans.usage_daily where day > current_date - 14 group by day) x), '[]'::jsonb));
 end $$;
 
+-- e-Belge kullanımı (operatör merkezi): ofis × ay; ortam süzgeci (varsayılan canlı), isteğe bağlı ay. Ay sonunda EDM'nin
+-- raporuyla karşılaştırmak içindir. months: bu ortamda veri olan aylar (yeniden eskiye).
+create or replace function lisans.op_edoc_usage(p_args jsonb) returns jsonb
+language plpgsql stable set search_path = '' as $$
+declare
+  e text := case when p_args ->> 'env' = 'test' then 'test' else 'live' end;
+  mo text := case when coalesce(p_args ->> 'month', '') ~ '^[0-9]{4}-(0[1-9]|1[0-2])$' then p_args ->> 'month' end;
+begin
+  return jsonb_build_object(
+    'ok', true,
+    'env', e,
+    'month', mo,
+    'months', coalesce((select jsonb_agg(m order by m desc) from (select distinct u.month as m from lisans.edoc_usage u where u.env = e) x), '[]'::jsonb),
+    'items', coalesce((select jsonb_agg(jsonb_build_object(
+        'machine', u.machine, 'month', u.month, 'env', u.env,
+        'officeName', coalesce(nullif(i.office_name, ''), l.customer, ''), 'licenseKey', l.key,
+        'efatura', u.efatura, 'earsiv', u.earsiv, 'esmm', u.esmm, 'total', u.efatura + u.earsiv + u.esmm,
+        'version', u.version, 'updatedAt', lisans.iso(u.updated_at))
+        order by u.month desc, lower(coalesce(nullif(i.office_name, ''), l.customer, '')), u.machine)
+      from lisans.edoc_usage u
+      join lisans.installations i on i.machine = u.machine
+      left join lateral lisans.best_license(u.machine) l on true
+      where u.env = e and (mo is null or u.month = mo)), '[]'::jsonb));
+end $$;
+
 -- Kotaları değiştirir (plan değişince). Sayılar pozitif; döngü günü 1–28.
 create or replace function lisans.op_update_infra_limits(p_args jsonb, p_ip text) returns jsonb
 language plpgsql volatile set search_path = '' as $$
@@ -1063,6 +1256,7 @@ begin
       when 'change_password' then return lisans.op_change_password(args, sess.token_hash, p_ip);
       when 'infra' then return lisans.op_infra(args);
       when 'update_infra_limits' then return lisans.op_update_infra_limits(args, p_ip);
+      when 'edoc_usage' then return lisans.op_edoc_usage(args);
       else return lisans.reject('BAD_ACTION', 'Bilinmeyen işlem.', 400);
     end case;
   exception
@@ -1087,6 +1281,8 @@ revoke all on all functions in schema lisans from public;
 revoke all on function public.lisans_activate(text, jsonb, text) from public;
 revoke all on function public.lisans_check(text, jsonb, text) from public;
 revoke all on function public.lisans_operator(text, text, text, jsonb, text) from public;
+revoke all on function public.lisans_kapi_durum(text, jsonb) from public;
 grant execute on function public.lisans_activate(text, jsonb, text) to anon, service_role;
 grant execute on function public.lisans_check(text, jsonb, text) to anon, service_role;
 grant execute on function public.lisans_operator(text, text, text, jsonb, text) to anon, service_role;
+grant execute on function public.lisans_kapi_durum(text, jsonb) to anon, service_role;
