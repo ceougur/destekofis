@@ -485,3 +485,22 @@ ul { margin: 0; padding: 0; list-style: none; }
   .dl-card, .dl-card:not(.started) .dl-icon svg, .dl-bar span { animation: none; transition: none; }
   .dl-bar span { left: 0; width: 100%; opacity: .5; }
 }
+
+/* ---------- Mobil (2.4.7) ---------- */
+.chip-new { color: var(--text); font-weight: 600; }
+.chip-new b { background: var(--primary); color: var(--on-primary, #fff); font-size: 12px; letter-spacing: .06em; padding: 2px 9px; border-radius: 999px; }
+.mobile-band { padding-top: 40px; }
+.mobile-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center; }
+.mobile-text h2 { margin-top: 12px; font-size: clamp(38px, 5.4vw, 64px); font-weight: 800; letter-spacing: -0.04em; line-height: 1.04; }
+.mobile-points { margin-top: 26px; display: grid; gap: 14px; }
+.mobile-points li { display: flex; gap: 12px; align-items: flex-start; font-size: 17px; color: var(--muted); }
+.mobile-points b { color: var(--text); font-weight: 600; }
+.mobile-points svg { width: 22px; height: 22px; flex: none; margin-top: 2px; fill: none; stroke: var(--primary); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.mobile-cta { margin-top: 30px; justify-content: flex-start; }
+.mobile-visual { margin: 0; justify-self: center; width: 100%; max-width: 440px; }
+.mobile-visual img { display: block; width: 100%; height: auto; border-radius: 24px; box-shadow: 0 30px 60px -24px rgba(9, 40, 30, .45); }
+@media (max-width: 860px) {
+  .mobile-grid { grid-template-columns: 1fr; gap: 36px; }
+  .mobile-visual { max-width: 400px; }
+}
+
