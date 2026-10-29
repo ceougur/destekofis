@@ -33,6 +33,14 @@ ve operatör merkezini otomatik olarak yeniden yayınlar. Alan adı alındığı
 - **Operatör merkezi:** `https://destek-ofis.vercel.app/admin`. Kullananlar (deneme başlatan/lisanslı ofisler), lisans
   oluşturma, bilgisayara lisans verme, süre değiştirme, engelleme, taşıma (bilgisayardan ayırma), internetsiz etkinleştirme
   kodu, KVKK silme, hareket kaydı ve parola değişimi.
+- **e-Belge Kullanımı (2.4.7, EDM iş ortaklığı):** program `/v1/check` gövdesinde `usage.edoc` ile son 3 ayın ay × ortam
+  (test/canlı) başına e-Fatura / e-Arşiv / e-SMM TOPLAM sayılarını gönderir (belge içeriği, alıcı, tutar, VKN, ETTN gelmez).
+  API (`web/api/_lib/service.mjs` `usageOf`) ve veritabanı (`lisans.record_edoc_usage`) biçimi ayrı ayrı denetler; geçersiz
+  satır atılır ve lisans yanıtı hiçbir durumda değişmez. Satır `lisans.edoc_usage` (kurulum, ay, ortam) başınadır ve her
+  doğrulamada üzerine yazılır. Operatör merkezi › **e-Belge Kullanımı**: ofis × ay, varsayılan Canlı, ay seçimi, alt TOPLAM;
+  ay sonunda EDM raporuyla karşılaştırılır.
+- **Testler:** `node --test test/*.test.mjs` (API, veritabanı taklit). Veritabanı testi yerel, geçici bir PostgreSQL ister:
+  `LISANS_TEST_PG="host=… port=… user=…" node --test test/*.test.mjs` (Supabase'e dokunmaz; tanımlı değilse atlanır).
 - **Durum:** `GET /api/lisans/v1/durum` imza anahtarının ve veritabanı bağlantısının durumunu verir (gizli bilgi içermez).
 - **Altyapı limitleri (Özet):** iki kart, Vercel (fonksiyon çağrısı, API veri aktarımı) ve Supabase (veritabanı boyutu,
   egress) kullanımını kotaya oranlar; %70'te sarı, %90'da kırmızı uyarı verir, üst çubukta rozet çıkar ve hareketlere
