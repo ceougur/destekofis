@@ -1,7 +1,8 @@
 -- DestekOfis lisans servisi — veritabanı (Supabase, PostgreSQL 15+).
 --
--- Tablolar "lisans" şemasındadır ve API'ye (PostgREST) açık değildir. Dışarıdan yalnızca public şemadaki üç fonksiyon
--- çağrılabilir: lisans_activate ve lisans_check (programın istekleri), lisans_operator (operatör merkezi). Üçü de
+-- Tablolar "lisans" şemasındadır ve API'ye (PostgREST) açık değildir. Dışarıdan yalnızca public şemadaki dört fonksiyon
+-- çağrılabilir: lisans_activate ve lisans_check (programın istekleri), lisans_kapi_durum (mobil kapıcı; salt okur, 2.4.7),
+-- lisans_operator (operatör merkezi). Dördü de
 -- SECURITY DEFINER çalışır ve ilk parametre olarak API sırrını ister. Sır yalnızca Vercel'deki lisans API'sinde
 -- (DESTEKOFIS_API_SECRET) durur; burada SHA-256 özeti saklanır. Operatör parolası bcrypt özetidir; oturumlar sunucu
 -- tarafında tutulur (tarayıcı çerezinde yalnızca rastgele belirteç vardır, burada onun özeti).
@@ -665,6 +666,54 @@ begin
   return r;
 end $$;
 
+-- ---------- Mobil kapıcı: lisans durumu (2.4.7 M3; program deposu docs/mobil/M3-TASARIM.md §8 madde 2) ----------
+-- Kapıcı (Cloudflare Worker) ofis sunucusu kapalıyken de lisansın hâlâ geçerli olduğunu öğrenmek için sorar. Karar
+-- lisans.check_impl ile AYNIDIR (bağlı geçerli lisans → o; yoksa deneme; taşınmış lisans → "blocked"; hiçbiri → LICENSE_NOT_FOUND),
+-- ama hiçbir şey YAZMAZ: son görülme, son doğrulama, IP, sürüm, kurulum kaydı, hareket (license.delivered / stop_sent /
+-- check.unknown), e-Belge kullanımı ve Altyapı sayacı (usage_daily) değişmez — ofis kapalıyken "çevrimiçi" görünmesin.
+-- STABLE: PostgreSQL bu işlevde (ve çağırdıklarında) INSERT/UPDATE/DELETE'i reddeder; salt okurluk böylece motorca da güvencelidir.
+-- check_impl'in karar kısmı değişirse bu da değişmeli (test: test/sql/kapi-durum.sql her dalı lisans_check ile karşılaştırır).
+create or replace function lisans.kapi_durum_impl(p_secret text, p_body jsonb) returns jsonb
+language plpgsql stable set search_path = '' as $$
+declare
+  m text;
+  lid text;
+  inst lisans.installations;
+  lic lisans.licenses;
+begin
+  if not lisans.authorized(p_secret) then
+    return lisans.reject('UNAUTHORIZED', 'Yetkisiz istek.', 401);
+  end if;
+  m := lisans.machine_of(p_body ->> 'machine');
+  lid := p_body ->> 'licenseId';
+  if p_body ->> 'product' is distinct from 'DestekOfis' or m is null or lid is null or lid = '' then
+    return lisans.reject('BAD_REQUEST', 'Geçersiz istek.', 400);
+  end if;
+
+  select * into lic from lisans.best_license(m, lid);
+  if lic.id is not null then
+    return jsonb_build_object('ok', true, 'claims', lisans.license_claims(lic));
+  end if;
+
+  select * into inst from lisans.installations where machine = m;
+  if inst.trial_id is not null and inst.trial_id = lid then
+    return jsonb_build_object('ok', true, 'claims', lisans.trial_claims(inst));
+  end if;
+
+  select * into lic from lisans.licenses where id = lid;
+  if lic.id is not null and exists (select 1 from lisans.license_bindings b where b.license_id = lid and b.machine = m) then
+    return jsonb_build_object('ok', true, 'claims', lisans.license_claims(lic, m, 'blocked',
+      'Bu lisans bu bilgisayardan kaldırıldı (başka bir bilgisayara taşındı).'));
+  end if;
+
+  return lisans.reject('LICENSE_NOT_FOUND', 'Lisans bulunamadı.');
+end $$;
+
+create or replace function public.lisans_kapi_durum(p_secret text, p_body jsonb) returns jsonb
+language sql stable security definer set search_path = '' as $$
+  select lisans.kapi_durum_impl(p_secret, p_body)
+$$;
+
 -- ---------- Operatör işlemleri ----------
 create or replace function lisans.op_login(p_password text, p_ip text) returns jsonb
 language plpgsql volatile set search_path = '' as $$
@@ -1232,6 +1281,8 @@ revoke all on all functions in schema lisans from public;
 revoke all on function public.lisans_activate(text, jsonb, text) from public;
 revoke all on function public.lisans_check(text, jsonb, text) from public;
 revoke all on function public.lisans_operator(text, text, text, jsonb, text) from public;
+revoke all on function public.lisans_kapi_durum(text, jsonb) from public;
 grant execute on function public.lisans_activate(text, jsonb, text) to anon, service_role;
 grant execute on function public.lisans_check(text, jsonb, text) to anon, service_role;
 grant execute on function public.lisans_operator(text, text, text, jsonb, text) to anon, service_role;
+grant execute on function public.lisans_kapi_durum(text, jsonb) to anon, service_role;
