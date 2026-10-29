@@ -17,8 +17,9 @@ test("lisans.sql: edoc_usage + lisans_check + operatör (yerel PostgreSQL)", { s
   assert.equal(r.status, 0, r.stderr);
   try {
     r = psql(db, ["-c", `do $$ begin
-        if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon nologin; end if;
-        if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role nologin; end if;
+        -- Roller küme genelidir; paralel koşan test dosyaları aynı anda oluşturabilir (yarış: zaten var → geç).
+        begin create role anon nologin; exception when duplicate_object or unique_violation then null; end;
+        begin create role service_role nologin; exception when duplicate_object or unique_violation then null; end;
       end $$; create schema if not exists extensions; create extension if not exists pgcrypto schema extensions;`]);
     assert.equal(r.status, 0, r.stderr);
     for (const round of [1, 2]) {

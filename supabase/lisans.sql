@@ -61,6 +61,11 @@ create table if not exists lisans.licenses (
   updated_at timestamptz not null default now()
 );
 create index if not exists licenses_machine_idx on lisans.licenses (machine) where machine is not null;
+-- 2.4.7 M2 (kullanıcı kararı 26.10.2026): program başına (iki şirket birlikte) en çok eşli uzaktan cihaz (telefon, tablet,
+-- uzak tarayıcı). Lisans belirtecine "mobileDevices" olarak girer; program ve kapıcı bu sınırı uygular. Göç: eski
+-- veritabanında sütun eklenir, mevcut lisanslar 3 alır; yeniden koşulabilir (sütun varsa dokunulmaz).
+alter table lisans.licenses add column if not exists mobile_devices integer not null default 3
+  constraint licenses_mobile_devices_check check (mobile_devices between 0 and 100);
 
 -- Lisansın hangi bilgisayarlara bağlandığının geçmişi (taşınan lisansın eski bilgisayarına durdurma bildirmek için).
 create table if not exists lisans.license_bindings (
@@ -182,6 +187,26 @@ exception when others then
   raise exception 'Tarih okunamadı: %', p;
 end $$;
 
+-- Operatörün yazdığı mobil cihaz sınırı: 0–100 tam sayı (JSON sayı ya da rakam dizgesi). Alan yoksa / null ise p_default.
+-- Sınır dışı, kesirli ya da sayı olmayan değer reddedilir (sessizce kırpılmaz).
+create or replace function lisans.mobile_devices_of(p_args jsonb, p_default int) returns int
+language plpgsql immutable set search_path = '' as $$
+declare
+  v jsonb := p_args -> 'mobileDevices';
+  n numeric;
+begin
+  if v is null or jsonb_typeof(v) = 'null' then return p_default; end if;
+  if jsonb_typeof(v) = 'number' then
+    n := (v #>> '{}')::numeric;
+  elsif jsonb_typeof(v) = 'string' and btrim(v #>> '{}') ~ '^[0-9]{1,3}$' then
+    n := btrim(v #>> '{}')::numeric;
+  end if;
+  if n is null or n <> trunc(n) or n < 0 or n > 100 then
+    raise exception 'Mobil cihaz sınırı 0 ile 100 arasında bir tam sayı olmalı.';
+  end if;
+  return n::int;
+end $$;
+
 create or replace function lisans.new_id(p_prefix text) returns text
 language sql volatile set search_path = '' as $$
   select p_prefix || '-' || to_char(now() at time zone 'UTC', 'YYYYMMDD') || '-' || upper(encode(extensions.gen_random_bytes(4), 'hex'))
@@ -286,7 +311,9 @@ language sql stable set search_path = '' as $$
     'schema', 1, 'product', 'DestekOfis', 'type', 'license-token', 'kind', 'trial',
     'status', i.trial_status, 'licenseId', i.trial_id, 'customer', left(i.office_name, 120), 'machine', i.machine,
     'issuedAt', lisans.iso(now()), 'startsAt', lisans.iso(i.trial_started_at), 'expiresAt', lisans.iso(i.trial_expires_at),
-    'offline', false, 'message', left(i.trial_message, 300))
+    'offline', false, 'message', left(i.trial_message, 300),
+    -- Denemede sınır sabittir (lisanstaki varsayılanla aynı).
+    'mobileDevices', 3)
 $$;
 
 create or replace function lisans.license_claims(l lisans.licenses, p_machine text default null, p_status text default null, p_message text default null) returns jsonb
@@ -296,7 +323,8 @@ language sql stable set search_path = '' as $$
     'status', coalesce(p_status, l.status), 'licenseId', l.id, 'customer', left(l.customer, 120),
     'machine', coalesce(p_machine, l.machine), 'issuedAt', lisans.iso(now()),
     'startsAt', lisans.iso(coalesce(l.activated_at, l.created_at)), 'expiresAt', lisans.iso(l.expires_at),
-    'offline', l.offline, 'message', left(coalesce(p_message, l.message), 300))
+    'offline', l.offline, 'message', left(coalesce(p_message, l.message), 300),
+    'mobileDevices', l.mobile_devices)
 $$;
 
 create or replace function lisans.days_left(p timestamptz) returns int
@@ -324,7 +352,7 @@ language sql stable set search_path = '' as $$
   select jsonb_build_object(
     'id', l.id, 'key', l.key, 'customer', l.customer, 'contact', l.contact, 'email', l.email, 'phone', l.phone,
     'note', l.note, 'status', l.status, 'message', l.message, 'expiresAt', lisans.iso(l.expires_at), 'offline', l.offline,
-    'machine', l.machine, 'activatedAt', lisans.iso(l.activated_at), 'createdAt', lisans.iso(l.created_at),
+    'mobileDevices', l.mobile_devices, 'machine', l.machine, 'activatedAt', lisans.iso(l.activated_at), 'createdAt', lisans.iso(l.created_at),
     'updatedAt', lisans.iso(l.updated_at), 'daysLeft', lisans.days_left(l.expires_at),
     'state', case when l.status = 'blocked' then 'blocked'
                   when l.expires_at is not null and l.expires_at <= now() then 'expired'
@@ -743,10 +771,12 @@ declare
   exp timestamptz;
   lic lisans.licenses;
   attempt int := 0;
+  md int;
 begin
   if lisans.txt(p_args, 'customer', 120) = '' then
     raise exception 'Müşteri (ofis) adı gerekli.';
   end if;
+  md := lisans.mobile_devices_of(p_args, 3);
   exp := lisans.time_of(p_args ->> 'expiresAt');
   if exp is not null and exp <= now() then
     raise exception 'Bitiş tarihi bugünden sonra olmalı.';
@@ -760,10 +790,10 @@ begin
   loop
     attempt := attempt + 1;
     begin
-      insert into lisans.licenses (id, key, customer, contact, email, phone, note, expires_at, offline, machine, activated_at)
+      insert into lisans.licenses (id, key, customer, contact, email, phone, note, expires_at, offline, mobile_devices, machine, activated_at)
       values (lisans.new_id('LIS'), lisans.new_key(), lisans.txt(p_args, 'customer', 120), lisans.txt(p_args, 'contact', 120),
               lisans.txt(p_args, 'email', 160), lisans.txt(p_args, 'phone', 40), lisans.txt(p_args, 'note', 500), exp,
-              coalesce((p_args ->> 'offline')::boolean, false), m, case when m is not null then now() end)
+              coalesce((p_args ->> 'offline')::boolean, false), md, m, case when m is not null then now() end)
       returning * into lic;
       exit;
     exception when unique_violation then
@@ -775,7 +805,7 @@ begin
     perform lisans.ensure_installation(m, lic.customer, lic.contact, lic.email, lic.phone);
   end if;
   perform lisans.log(case when m is null then 'license.created' else 'license.assigned' end, 'operator', m, lic.id, p_ip,
-    jsonb_build_object('customer', lic.customer, 'expiresAt', lisans.iso(lic.expires_at), 'offline', lic.offline));
+    jsonb_build_object('customer', lic.customer, 'expiresAt', lisans.iso(lic.expires_at), 'offline', lic.offline, 'mobileDevices', lic.mobile_devices));
   return jsonb_build_object('ok', true, 'license', lisans.license_json(lic));
 end $$;
 
@@ -785,9 +815,11 @@ declare
   old lisans.licenses;
   lic lisans.licenses;
   exp timestamptz;
+  md int;
 begin
   select * into old from lisans.licenses where id = p_args ->> 'id' for update;
   if old.id is null then raise exception 'Lisans bulunamadı.'; end if;
+  md := lisans.mobile_devices_of(p_args, old.mobile_devices);
   exp := case when p_args ? 'expiresAt' then lisans.time_of(p_args ->> 'expiresAt') else old.expires_at end;
   if p_args ? 'customer' and lisans.txt(p_args, 'customer', 120) = '' then
     raise exception 'Müşteri (ofis) adı boş olamaz.';
@@ -800,6 +832,7 @@ begin
     note = case when p_args ? 'note' then lisans.txt(p_args, 'note', 500) else note end,
     message = case when p_args ? 'message' then lisans.txt(p_args, 'message', 300) else message end,
     offline = case when p_args ? 'offline' then coalesce((p_args ->> 'offline')::boolean, false) else offline end,
+    mobile_devices = md,
     expires_at = exp,
     updated_at = now()
   where id = old.id
@@ -811,6 +844,10 @@ begin
   if (old.customer, old.contact, old.email, old.phone, old.note, old.message, old.offline)
      is distinct from (lic.customer, lic.contact, lic.email, lic.phone, lic.note, lic.message, lic.offline) then
     perform lisans.log('license.updated', 'operator', lic.machine, lic.id, p_ip, jsonb_build_object('customer', lic.customer));
+  end if;
+  if old.mobile_devices is distinct from lic.mobile_devices then
+    perform lisans.log('license.mobile_devices', 'operator', lic.machine, lic.id, p_ip,
+      jsonb_build_object('from', old.mobile_devices, 'to', lic.mobile_devices));
   end if;
   if lic.machine is not null then perform lisans.fill_installation(lic.machine, lic.customer, lic.contact, lic.email, lic.phone); end if;
   return jsonb_build_object('ok', true, 'license', lisans.license_json(lic));

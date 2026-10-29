@@ -100,6 +100,20 @@
         return { tone: "muted", text: license.state };
     }
   }
+  // 2.4.7 M2: program başına en çok eşli uzaktan cihaz (telefon, tablet, uzak tarayıcı; iki şirket birlikte). Varsayılan 3, 0–100.
+  // Veritabanı da aynı sınırı denetler (lisans.mobile_devices_of); program yeni sınırı bir sonraki doğrulamada alır.
+  const MOBILE_DEFAULT = 3;
+  const MOBILE_ERROR = "Mobil cihaz sınırı 0 ile 100 arasında bir tam sayı olmalı.";
+  const mobileText = license => `${license.mobileDevices ?? MOBILE_DEFAULT} mobil cihaz`;
+  function mobileValue(raw) {
+    const text = String(raw ?? "").trim();
+    if (!/^\d{1,3}$/.test(text)) return null;
+    const number = Number(text);
+    return number <= 100 ? number : null;
+  }
+  const mobileField = current =>
+    `<label class="field"><span>Mobil Cihaz Sınırı</span><input name="mobileDevices" type="number" inputmode="numeric" min="0" max="100" step="1" value="${esc(String(current))}"><small>Telefon, tablet ve uzaktaki bilgisayar sayılır (iki şirket birlikte). 0: yeni cihaz eşlenemez. Program yeni sınırı bir sonraki doğrulamada alır.</small></label>`;
+
   const expiryText = license => (license.expiresAt ? `${fmtDate(license.expiresAt)}${license.daysLeft != null && license.state !== "expired" ? ` (${license.daysLeft} gün)` : ""}` : "Süresiz");
 
   const EVENTS = {
@@ -118,6 +132,7 @@
     "license.rejected": event => ({ blocked: "Engelli lisans denendi", expired: "Süresi dolmuş lisans denendi", in_use: "Başka bilgisayardaki lisans denendi" })[event.detail?.reason] || "Lisans reddedildi",
     "license.extended": event => `Lisans bitişi değiştirildi: ${event.detail?.to ? fmtDate(event.detail.to) : "süresiz"}`,
     "license.updated": "Lisans bilgileri düzenlendi",
+    "license.mobile_devices": event => `Mobil cihaz sınırı değiştirildi: ${event.detail?.from ?? "—"} → ${event.detail?.to ?? "—"}`,
     "license.blocked": "Lisans engellendi",
     "license.unblocked": "Lisans engeli kaldırıldı",
     "license.released": "Lisans bilgisayardan ayrıldı (taşıma)",
@@ -838,7 +853,7 @@
     const where = license.machine ? `${esc(license.installation?.officeName || "Bilgisayar")}<span class="sub mono">${esc(installCode(license.machine))}</span>` : '<span class="sub">Henüz bir bilgisayara bağlı değil</span>';
     return `<button class="row" type="button" data-act="open-license" data-id="${esc(license.id)}">
       <div><b>${esc(license.customer)}</b><span class="sub">${esc([license.contact, license.phone].filter(Boolean).join(" · ") || "—")}</span></div>
-      <div><b class="mono">${esc(license.key)}</b><span class="sub">${license.offline ? "İnternetsiz lisans" : "İnternetli lisans"}</span></div>
+      <div><b class="mono">${esc(license.key)}</b><span class="sub">${license.offline ? "İnternetsiz lisans" : "İnternetli lisans"} · ${esc(mobileText(license))}</span></div>
       <div><span class="pill ${status.tone}">${esc(status.text)}</span><span class="sub">Bitiş: ${esc(expiryText(license))}</span></div>
       <div><b>${where}</b></div>
     </button>`;
@@ -898,6 +913,7 @@
         <dl class="kv">
           <dt>Bitiş</dt><dd>${esc(expiryText(license))}</dd>
           <dt>Tür</dt><dd>${license.offline ? "İnternetsiz (kodla açılır, uzaktan engellenemez)" : "İnternetli (program 12 saatte bir doğrular)"}</dd>
+          <dt>Mobil Cihaz Sınırı</dt><dd>${esc(mobileText(license))}</dd>
           <dt>Bilgisayar</dt><dd>${license.machine ? `${esc(license.installation?.officeName || "—")} · <span class="mono">${esc(installCode(license.machine))}</span>` : "Henüz bir bilgisayara bağlı değil"}</dd>
           ${license.activatedAt ? `<dt>Bağlandığı tarih</dt><dd>${esc(fmtDateTime(license.activatedAt))}</dd>` : ""}
           ${license.installation?.lastSeen ? `<dt>Son bağlantı</dt><dd>${esc(ago(license.installation.lastSeen))}</dd>` : ""}
@@ -1054,6 +1070,7 @@
         <label class="field"><span>Telefon</span><input name="phone" type="tel" maxlength="40" value="${esc(license.phone)}"></label>
         <label class="field wide"><span>E-posta</span><input name="email" type="email" maxlength="160" value="${esc(license.email)}"></label>
         <label class="check wide"><input type="checkbox" name="offline"${license.offline ? " checked" : ""}><span><b>İnternetsiz lisans</b><small>Sunucu bilgisayar internete hiç bağlanmıyorsa işaretleyin. Değişiklik programa yeni bir internetsiz kodla ulaşır.</small></span></label>
+        ${mobileField(license.mobileDevices ?? MOBILE_DEFAULT)}
         <label class="field wide"><span>Not (yalnızca siz görürsünüz)</span><textarea name="note" maxlength="500" rows="3">${esc(license.note)}</textarea></label>
         <p class="form-error wide" data-error></p>
         <div class="modal-actions wide"><button type="button" class="btn btn-ghost" data-close>Vazgeç</button><button type="submit" class="btn btn-primary">Kaydet</button></div>
@@ -1067,7 +1084,13 @@
         $("[data-error]", form).textContent = "Müşteri / ofis adını yazın.";
         return;
       }
-      const done = await run($("button[type=submit]", form), () => api("update_license", { id: license.id, customer: value("customer"), contact: value("contact"), phone: value("phone"), email: value("email"), note: value("note"), offline: form.elements.namedItem("offline").checked }), $("[data-error]", form));
+      const mobileDevices = mobileValue(value("mobileDevices"));
+      if (mobileDevices == null) {
+        $("[data-error]", form).textContent = MOBILE_ERROR;
+        form.elements.namedItem("mobileDevices").focus();
+        return;
+      }
+      const done = await run($("button[type=submit]", form), () => api("update_license", { id: license.id, customer: value("customer"), contact: value("contact"), phone: value("phone"), email: value("email"), note: value("note"), offline: form.elements.namedItem("offline").checked, mobileDevices }), $("[data-error]", form));
       if (done) afterLicenseChange(license.id, "Bilgiler kaydedildi.");
     });
   }
@@ -1132,6 +1155,7 @@
               <input name="machine" class="mono" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" aria-label="Kurulum kodu"${bindToCode ? "" : " hidden"}>
             </div>`}
         <label class="check wide"><input type="checkbox" name="offline"><span><b>İnternetsiz lisans</b><small>Yalnızca sunucu bilgisayar internete hiç bağlanmıyorsa işaretleyin. Programa anahtarla değil, internetsiz kodla girilir ve uzaktan engellenemez.</small></span></label>
+        ${mobileField(MOBILE_DEFAULT)}
         <label class="field wide"><span>Not (yalnızca siz görürsünüz)</span><textarea name="note" maxlength="500" rows="2"></textarea></label>
         <p class="form-error wide" data-error></p>
         <div class="modal-actions wide"><button type="button" class="btn btn-ghost" data-close>Vazgeç</button><button type="submit" class="btn btn-primary">${fixed ? "Lisansı ver" : "Lisansı oluştur"}</button></div>
@@ -1176,6 +1200,12 @@
           return;
         }
       }
+      const mobileDevices = mobileValue(field("mobileDevices").value);
+      if (mobileDevices == null) {
+        error.textContent = MOBILE_ERROR;
+        field("mobileDevices").focus();
+        return;
+      }
       const result = await run($("button[type=submit]", form), () => api("create_license", {
         customer,
         contact: field("contact").value.trim(),
@@ -1184,6 +1214,7 @@
         note: field("note").value.trim(),
         expiresAt: term.value,
         offline: field("offline").checked,
+        mobileDevices,
         machine,
       }), error);
       if (!result) return;
