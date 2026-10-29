@@ -97,6 +97,25 @@ create table if not exists lisans.usage_daily (
 );
 create index if not exists events_ip_idx on lisans.events (ip, type, at desc);
 
+-- e-Belge kullanımı (2.4.7, EDM iş ortaklığı; operatör merkezi › e-Belge Kullanımı): program her doğrulamada (/v1/check)
+-- son 3 ayın (bu ay + önceki 2) ay × ortam başına TOPLAM sayılarını gönderir (usage.edoc). Belge içeriği, alıcı, tutar,
+-- VKN/TCKN, belge no ve ETTN GELMEZ. Satır (kurulum, ay, ortam) başınadır ve her doğrulamada baştan yazılır (geç kesinleşen
+-- gönderim bir sonraki doğrulamada düzelir). Geçersiz satır yok sayılır; kayıt hatası lisans yanıtını ASLA bozmaz.
+create table if not exists lisans.edoc_usage (
+  machine text not null references lisans.installations (machine) on delete cascade,
+  month text not null check (month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  env text not null check (env in ('test', 'live')),
+  efatura integer not null default 0 check (efatura between 0 and 1000000),
+  earsiv integer not null default 0 check (earsiv between 0 and 1000000),
+  esmm integer not null default 0 check (esmm between 0 and 1000000),
+  license_id text not null default '',
+  version text not null default '',
+  first_reported_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (machine, month, env)
+);
+create index if not exists edoc_usage_month_idx on lisans.edoc_usage (env, month);
+
 create table if not exists lisans.sessions (
   token_hash text primary key,
   created_at timestamptz not null default now(),
@@ -112,6 +131,7 @@ alter table lisans.licenses enable row level security;
 alter table lisans.license_bindings enable row level security;
 alter table lisans.events enable row level security;
 alter table lisans.sessions enable row level security;
+alter table lisans.edoc_usage enable row level security;
 revoke all on all tables in schema lisans from public;
 revoke all on all sequences in schema lisans from public;
 
@@ -194,6 +214,59 @@ language sql volatile set search_path = '' as $$
   values (current_date, p_source, 1, coalesce(octet_length(p_result::text), 0))
   on conflict (day, source) do update set requests = t.requests + 1, bytes_out = t.bytes_out + excluded.bytes_out
 $$;
+
+-- e-Belge kullanım sayısı: JSON tam sayı, 0 ile 1.000.000 arası; değilse null (satır yok sayılır).
+create or replace function lisans.edoc_count(p jsonb) returns integer
+language plpgsql immutable set search_path = '' as $$
+declare
+  n numeric;
+begin
+  if p is null or jsonb_typeof(p) <> 'number' then return null; end if;
+  n := (p #>> '{}')::numeric;
+  if n < 0 or n > 1000000 or n <> trunc(n) then return null; end if;
+  return n::integer;
+end $$;
+
+-- Doğrulama isteğindeki usage.edoc satırlarını (kurulum, ay, ortam) başına üzerine yazar; yazılan satır sayısını döndürür.
+-- Kabul: usage nesne, edoc dizi ve en çok 12 eleman (fazlası: hepsi yok sayılır); her satırda ay "YYYY-MM" ve
+-- [bu ay − 3, bu ay + 1] aralığında (UTC; Türkiye saati ve küçük saat kaymaları için pay), ortam test/live, üç sayı geçerli.
+-- Aynı (ay, ortam) iki kez gelirse ilki alınır. Kurulum kaydı yoksa hiçbir şey yazılmaz.
+create or replace function lisans.record_edoc_usage(p_machine text, p_body jsonb) returns integer
+language plpgsql volatile set search_path = '' as $$
+declare
+  items jsonb := p_body -> 'usage' -> 'edoc';
+  cur date := date_trunc('month', now() at time zone 'UTC')::date;
+  lo text := to_char(cur - interval '3 month', 'YYYY-MM');
+  hi text := to_char(cur + interval '1 month', 'YYYY-MM');
+  n integer := 0;
+begin
+  if p_machine is null or jsonb_typeof(p_body -> 'usage') is distinct from 'object' or jsonb_typeof(items) is distinct from 'array' then
+    return 0;
+  end if;
+  if jsonb_array_length(items) > 12 then return 0; end if;
+  if not exists (select 1 from lisans.installations i where i.machine = p_machine) then return 0; end if;
+  insert into lisans.edoc_usage as t (machine, month, env, efatura, earsiv, esmm, license_id, version)
+  select distinct on (x.month, x.env) p_machine, x.month, x.env, x.efatura, x.earsiv, x.esmm,
+         lisans.txt(p_body, 'licenseId', 64), lisans.txt(p_body, 'version', 20)
+  from (
+    select e.ord,
+           case when jsonb_typeof(e.v -> 'month') = 'string' then e.v ->> 'month' end as month,
+           case when jsonb_typeof(e.v -> 'env') = 'string' then e.v ->> 'env' end as env,
+           lisans.edoc_count(e.v -> 'efatura') as efatura,
+           lisans.edoc_count(e.v -> 'earsiv') as earsiv,
+           lisans.edoc_count(e.v -> 'esmm') as esmm
+    from jsonb_array_elements(items) with ordinality as e(v, ord)
+    where jsonb_typeof(e.v) = 'object'
+  ) x
+  where x.month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$' and x.month between lo and hi and x.env in ('test', 'live')
+    and x.efatura is not null and x.earsiv is not null and x.esmm is not null
+  order by x.month, x.env, x.ord
+  on conflict (machine, month, env) do update set
+    efatura = excluded.efatura, earsiv = excluded.earsiv, esmm = excluded.esmm,
+    license_id = excluded.license_id, version = excluded.version, updated_at = now();
+  get diagnostics n = row_count;
+  return n;
+end $$;
 
 -- Bir bilgisayara bağlı lisanslardan geçerli olanı (yoksa en son olanı) seçer; p_prefer istenen lisanstır.
 create or replace function lisans.best_license(p_machine text, p_prefer text default null) returns setof lisans.licenses
@@ -551,6 +624,15 @@ declare
   r jsonb;
 begin
   r := lisans.check_impl(p_secret, p_body, p_ip);
+  -- e-Belge kullanımı yalnız kabul edilen doğrulamada yazılır; ayrı alt işlemdedir: hata olursa yalnız bu kayıt geri alınır,
+  -- lisans yanıtı (r) değişmez.
+  if r ->> 'ok' = 'true' then
+    begin
+      perform lisans.record_edoc_usage(lisans.machine_of(p_body ->> 'machine'), p_body);
+    exception when others then
+      raise warning 'e-Belge kullanımı yazılamadı: %', sqlerrm;
+    end;
+  end if;
   perform lisans.count_usage('program', r);
   return r;
 end $$;
@@ -989,6 +1071,31 @@ begin
       from lisans.usage_daily where day > current_date - 14 group by day) x), '[]'::jsonb));
 end $$;
 
+-- e-Belge kullanımı (operatör merkezi): ofis × ay; ortam süzgeci (varsayılan canlı), isteğe bağlı ay. Ay sonunda EDM'nin
+-- raporuyla karşılaştırmak içindir. months: bu ortamda veri olan aylar (yeniden eskiye).
+create or replace function lisans.op_edoc_usage(p_args jsonb) returns jsonb
+language plpgsql stable set search_path = '' as $$
+declare
+  e text := case when p_args ->> 'env' = 'test' then 'test' else 'live' end;
+  mo text := case when coalesce(p_args ->> 'month', '') ~ '^[0-9]{4}-(0[1-9]|1[0-2])$' then p_args ->> 'month' end;
+begin
+  return jsonb_build_object(
+    'ok', true,
+    'env', e,
+    'month', mo,
+    'months', coalesce((select jsonb_agg(m order by m desc) from (select distinct u.month as m from lisans.edoc_usage u where u.env = e) x), '[]'::jsonb),
+    'items', coalesce((select jsonb_agg(jsonb_build_object(
+        'machine', u.machine, 'month', u.month, 'env', u.env,
+        'officeName', coalesce(nullif(i.office_name, ''), l.customer, ''), 'licenseKey', l.key,
+        'efatura', u.efatura, 'earsiv', u.earsiv, 'esmm', u.esmm, 'total', u.efatura + u.earsiv + u.esmm,
+        'version', u.version, 'updatedAt', lisans.iso(u.updated_at))
+        order by u.month desc, lower(coalesce(nullif(i.office_name, ''), l.customer, '')), u.machine)
+      from lisans.edoc_usage u
+      join lisans.installations i on i.machine = u.machine
+      left join lateral lisans.best_license(u.machine) l on true
+      where u.env = e and (mo is null or u.month = mo)), '[]'::jsonb));
+end $$;
+
 -- Kotaları değiştirir (plan değişince). Sayılar pozitif; döngü günü 1–28.
 create or replace function lisans.op_update_infra_limits(p_args jsonb, p_ip text) returns jsonb
 language plpgsql volatile set search_path = '' as $$
@@ -1063,6 +1170,7 @@ begin
       when 'change_password' then return lisans.op_change_password(args, sess.token_hash, p_ip);
       when 'infra' then return lisans.op_infra(args);
       when 'update_infra_limits' then return lisans.op_update_infra_limits(args, p_ip);
+      when 'edoc_usage' then return lisans.op_edoc_usage(args);
       else return lisans.reject('BAD_ACTION', 'Bilinmeyen işlem.', 400);
     end case;
   exception

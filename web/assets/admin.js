@@ -17,6 +17,7 @@
     installations: null,
     licenses: null,
     filters: { kullananlar: "all", lisanslar: "all", hareketler: "all" },
+    edoc: { env: "live", month: "" }, // e-Belge Kullanımı: ortam (varsayılan Canlı) ve ay ("" = Tüm Aylar)
     search: { kullananlar: "", lisanslar: "" },
     infra: null, // Altyapı limitleri: { at, data } — 10 dakika önbellek (her sayfa açılışında sunucuya gidilmez)
   };
@@ -477,7 +478,7 @@
   });
 
   // ---------- Yönlendirme ----------
-  const VIEWS = { ozet: renderOverview, kullananlar: renderInstallations, lisanslar: renderLicenses, hareketler: renderEvents, ayarlar: renderSettings };
+  const VIEWS = { ozet: renderOverview, kullananlar: renderInstallations, lisanslar: renderLicenses, ebelge: renderEdocUsage, hareketler: renderEvents, ayarlar: renderSettings };
   const currentView = () => {
     const view = location.hash.slice(1);
     return VIEWS[view] ? view : "ozet";
@@ -1217,6 +1218,62 @@
       const action = event.target.closest("[data-do]")?.dataset.do;
       if (action === "open") openLicense(license.id);
       else if (action === "code") offlineCode(license);
+    });
+  }
+
+  // ---------- e-Belge Kullanımı (EDM iş ortaklığı) ----------
+  // Program her lisans doğrulamasında son 3 ayın ay × ortam başına TOPLAM e-Belge sayılarını gönderir (belge içeriği gelmez).
+  // Ay sonunda EDM'nin raporuyla karşılaştırmak için: ofis × ay, e-Fatura / e-Arşiv / e-SMM / Toplam ve alt TOPLAM satırı.
+  const EDOC_ENVS = [["live", "Canlı"], ["test", "Test"]];
+  const monthFormat = new Intl.DateTimeFormat("tr-TR", { timeZone: "UTC", month: "long", year: "numeric" });
+  const fmtMonth = ym => {
+    const [y, m] = String(ym || "").split("-").map(Number);
+    if (!y || !m) return "—";
+    const text = monthFormat.format(new Date(Date.UTC(y, m - 1, 1)));
+    return text.charAt(0).toLocaleUpperCase("tr-TR") + text.slice(1);
+  };
+  function edocTableHtml(items) {
+    const sum = key => items.reduce((total, item) => total + (Number(item[key]) || 0), 0);
+    const num = value => `<td class="num">${esc(fmtInt(value))}</td>`;
+    const body = items.map(item => `<tr>
+        <td><b>${esc(item.officeName || "Adı Yazılmamış Ofis")}</b><span class="sub mono">${esc(installCode(item.machine))}</span></td>
+        <td>${esc(fmtMonth(item.month))}</td>
+        ${num(item.efatura)}${num(item.earsiv)}${num(item.esmm)}<td class="num"><b>${esc(fmtInt(item.total))}</b></td>
+        <td><span class="sub">${esc(fmtDateTime(item.updatedAt))}</span><span class="sub">${item.version ? `Sürüm ${esc(item.version)}` : ""}</span></td>
+      </tr>`).join("");
+    return `<div class="table-wrap"><table class="usage-table">
+      <thead><tr><th>Ofis</th><th>Ay</th><th class="num">e-Fatura</th><th class="num">e-Arşiv</th><th class="num">e-SMM</th><th class="num">Toplam</th><th>Son Bildirim</th></tr></thead>
+      <tbody>${body}</tbody>
+      <tfoot><tr><td>TOPLAM</td><td>${esc(fmtInt(items.length))} satır</td>${num(sum("efatura"))}${num(sum("earsiv"))}${num(sum("esmm"))}<td class="num"><b>${esc(fmtInt(sum("total")))}</b></td><td></td></tr></tfoot>
+    </table></div>`;
+  }
+  async function renderEdocUsage(content, current) {
+    const { env, month } = state.edoc;
+    const data = await api("edoc_usage", { env, month: month || null });
+    if (!current()) return;
+    const months = Array.isArray(data.months) ? data.months : [];
+    const items = Array.isArray(data.items) ? data.items : [];
+    content.innerHTML = `
+      <div class="page-head"><div><h1>e-Belge Kullanımı</h1><p>Ofislerin EDM'ye gönderdiği e-Fatura, e-Arşiv ve e-SMM adetleri (ay ve tür bazında sayı; belge içeriği gelmez). Program her lisans doğrulamasında son 3 ayın toplamını yeniden bildirir. Ay sonunda EDM'nin raporuyla karşılaştırın.</p></div></div>
+      <div class="toolbar">
+        <div class="chips" role="group" aria-label="Ortam">${EDOC_ENVS.map(([key, label]) => `<button type="button" class="chip${key === data.env ? " on" : ""}" data-edoc-env="${key}">${esc(label)}</button>`).join("")}</div>
+        <label class="field field-inline"><span>Ay</span><select id="edocMonth" aria-label="Ay">
+          <option value="">Tüm Aylar</option>
+          ${months.map(ym => `<option value="${esc(ym)}"${ym === data.month ? " selected" : ""}>${esc(fmtMonth(ym))}</option>`).join("")}
+        </select></label>
+      </div>
+      ${items.length ? edocTableHtml(items) : `<div class="empty">${months.length ? "Bu ay için bildirim yok." : `${data.env === "test" ? "Test" : "Canlı"} ortamında henüz e-Belge kullanımı bildirilmedi. Bildirim 2.4.7 ve sonraki sürümlerden, lisans doğrulamasıyla gelir.`}</div>`}
+      <p class="muted infra-foot">Sayılar programın bildirdiği toplamlardır; EDM'nin kabul ettiği gönderimler sayılır (yeniden deneme, durum sorgusu ve iptal sayıyı artırmaz). EDM portalından doğrudan kesilen belgeler ve 2.4.7 öncesi sürümler bildirilmez.</p>`;
+    $$("[data-edoc-env]", content).forEach(chip =>
+      chip.addEventListener("click", () => {
+        if (state.edoc.env === chip.dataset.edocEnv) return;
+        state.edoc = { env: chip.dataset.edocEnv, month: "" };
+        refreshView();
+      }),
+    );
+    $("#edocMonth", content).addEventListener("change", event => {
+      state.edoc.month = event.target.value;
+      refreshView();
     });
   }
 
