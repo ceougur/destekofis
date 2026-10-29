@@ -39,6 +39,12 @@ ve operatör merkezini otomatik olarak yeniden yayınlar. Alan adı alındığı
   satır atılır ve lisans yanıtı hiçbir durumda değişmez. Satır `lisans.edoc_usage` (kurulum, ay, ortam) başınadır ve her
   doğrulamada üzerine yazılır. Operatör merkezi › **e-Belge Kullanımı**: ofis × ay, varsayılan Canlı, ay seçimi, alt TOPLAM;
   ay sonunda EDM raporuyla karşılaştırılır.
+- **Mobil Cihaz Sınırı (2.4.7 M2):** `lisans.licenses.mobile_devices` (0–100, varsayılan 3) program başına en çok eşli uzaktan
+  cihazdır (telefon, tablet, uzak tarayıcı; iki şirket birlikte). Lisans belirtecine `mobileDevices` olarak girer (denemede sabit 3);
+  operatör merkezinde lisans oluştururken ve "Bilgileri düzenle"de değiştirilir, değişiklik hareketlere `license.mobile_devices`
+  olarak yazılır. Program yeni sınırı bir sonraki doğrulamada alır (internetsiz lisansta yeni kodla); eski program alanı yok sayar.
+  Testler programın `server/lib/license-token.mjs` kopyasıyla (`test/fixtures/program-license-token.mjs`; `DESTEKOFIS_PROGRAM_DIR`
+  verilirse aynılığı denetlenir) imzayı doğrular; göç testi `test/sql/lisans-2.4.6.sql` (2.4.6 şeması) üzerine yeni şemayı koşar.
 - **Testler:** `node --test test/*.test.mjs` (API, veritabanı taklit). Veritabanı testi yerel, geçici bir PostgreSQL ister:
   `LISANS_TEST_PG="host=… port=… user=…" node --test test/*.test.mjs` (Supabase'e dokunmaz; tanımlı değilse atlanır).
 - **Durum:** `GET /api/lisans/v1/durum` imza anahtarının ve veritabanı bağlantısının durumunu verir (gizli bilgi içermez).
