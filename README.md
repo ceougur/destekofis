@@ -67,7 +67,9 @@ ve operatör merkezini otomatik olarak yeniden yayınlar. Alan adı alındığı
   (`lisans.settings.infra_limits`; varsayılan Vercel Hobby 1.000.000 çağrı / 100 GB, Supabase Free 500 MB / 5 GB).
 - **Cloudflare (Mobil) kartı (2.4.8 C1):** Altyapı limitlerinin üçüncü kartı mobil kullanımın Cloudflare tarafını (kapıcı Worker'ı,
   R2 özet deposu, ofis tünelleri) ücretsiz plan kotalarına oranlar: Worker istekleri (bugün, UTC; 100.000/gün), R2 depolama (10 GB-ay, ondalık),
-  R2 A sınıfı (1.000.000/ay) ve B sınıfı (10.000.000/ay) işlemler, tünel sayısı (hesap başına 1.000). Kota rakamları
+  R2 A sınıfı (1.000.000/ay) ve B sınıfı (10.000.000/ay) işlemler, tünel sayısı (hesap başına 1.000), DNS kayıtları
+  (`CF_ZONE_NAME`, varsayılan destekofis.net; Free alanda 01.09.2024 öncesi açıldıysa 1.000, sonra 200 — kota Zone API'deki plan ve
+  `created_on`'dan seçilir, belirlenemezse "Okunamadı"; her mobil ofis bir CNAME kullandığından mobil ofis sayısının asıl sınırı). Kota rakamları
   `web/api/_lib/cloudflare.mjs` `CF_LIMITS`'tedir (Cloudflare belgesinden doğrulandı 30.10.2026; R2 10 GB-ay = 10^9 bayt,
   `CF_LIMITS_VERIFIED = true`; false yapılırsa kart "doğrulanacak" der). Veri sunucu tarafında (operatör oturumu doğrulandıktan sonra) GraphQL Analytics (`workersInvocationsAdaptive`,
   `r2StorageAdaptiveGroups`, `r2OperationsAdaptiveGroups`) ve `GET /accounts/{id}/cfd_tunnel` ile okunur; 10 dakika önbelleklenir
@@ -99,7 +101,8 @@ noktalarıdır ve sır olmadan hiçbir şey döndürmez). Tablolarda RLS açıkt
 | `DESTEKOFIS_LICENSE_KEY_ID` | düz | `destekofis-lisans-2026-1` |
 | `KAPI_LISANS_ANAHTARI` | gizli (Sensitive) | Mobil kapıcının `/v1/kapi/durum` anahtarı; kapıcının `wrangler secret`'ıyla aynı değer, en az 32 karakter (yoksa uç kapalı) |
 | `CF_ACCOUNT_ID` | düz | Cloudflare hesap kimliği (32 karakter); Cloudflare (Mobil) kartı için |
-| `CF_ANALYTICS_TOKEN` | gizli (Sensitive) | YALNIZ OKUMA belirteci (Account Analytics Read, Workers R2 Storage Read, Cloudflare Tunnel Read); kapıcının yazma yetkili `CF_API_TOKEN`'ı DEĞİL. Yoksa kart "Bağlantı Kurulmadı" |
+| `CF_ZONE_NAME` | düz | DNS kaydı sayılan alan; varsayılan `destekofis.net` |
+| `CF_ANALYTICS_TOKEN` | gizli (Sensitive) | YALNIZ OKUMA belirteci (Account Analytics Read, Workers R2 Storage Read, Cloudflare Tunnel Read; Zone Read + DNS Read yalnız destekofis.net); kapıcının yazma yetkili `CF_API_TOKEN`'ı DEĞİL. Yoksa kart "Bağlantı Kurulmadı" |
 
 Gizli değerler depoya ve belgelere yazılmaz. Vercel'deki gizli değerler sonradan okunamaz; kaybolursa yenisi üretilir:
 

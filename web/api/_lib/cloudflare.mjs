@@ -7,7 +7,9 @@
 // Ortam değişkenleri (Vercel → destek-ofis → Settings → Environment Variables):
 //   CF_ACCOUNT_ID       Cloudflare hesap kimliği (32 onaltılık karakter; düz)
 //   CF_ANALYTICS_TOKEN  YALNIZ OKUMA yetkili API belirteci (Sensitive): Account Analytics Read, Workers R2 Storage Read,
-//                       Cloudflare Tunnel Read. Kapıcının CF_API_TOKEN'ı (yazma yetkili) BURADA KULLANILMAZ.
+//                       Cloudflare Tunnel Read; Zone → Zone Read + Zone → DNS Read (yalnız CF_ZONE_NAME alanı).
+//                       Kapıcının CF_API_TOKEN'ı (yazma yetkili) BURADA KULLANILMAZ.
+//   CF_ZONE_NAME        DNS kaydı sayılan alan (varsayılan destekofis.net; düz)
 // İkisi de yoksa kart "Bağlantı Kurulmadı" der; okuma başarısızsa ilgili satır "Okunamadı" der (0 / boş gösterilmez).
 //
 // Kaynaklar: GraphQL Analytics (workersInvocationsAdaptive; r2StorageAdaptiveGroups, r2OperationsAdaptiveGroups) ve
@@ -17,6 +19,9 @@
 // cloudflare-one/account-limits → CF_LIMITS_VERIFIED=true):
 //   Workers 100.000 istek/gün (UTC 00:00'da sıfırlanır), R2 10 GB-ay Standard depolama (10^9 bayt), A sınıfı 1.000.000 / ay, B sınıfı 10.000.000 / ay,
 //   hesap başına 1.000 tünel.
+//   DNS kayıtları (dns/manage-dns-records): Free alan 01.09.2024'ten ÖNCE açıldıysa 1.000, sonra 200 (Email Routing MX/TXT dahil).
+//   Alanın açılış tarihi ve planı Zone API'den okunur; okunamazsa ya da plan Free değilse kota VARSAYILMAZ → "Okunamadı".
+//   Her mobil ofis bir CNAME kullanır: mobil ofis sayısının asıl sınırı budur.
 
 export const CF_LIMITS = Object.freeze({
   workerRequestsPerDay: 100_000,
@@ -24,6 +29,9 @@ export const CF_LIMITS = Object.freeze({
   r2ClassAPerMonth: 1_000_000,
   r2ClassBPerMonth: 10_000_000,
   tunnelsPerAccount: 1_000,
+  dnsRecordsFreeLegacy: 1_000, // Free alan, 2024-09-01'den önce açılmış
+  dnsRecordsFree: 200, // Free alan, 2024-09-01 ve sonrası
+  dnsCutoff: "2024-09-01T00:00:00Z",
 });
 export const CF_LIMITS_VERIFIED = true;
 
@@ -162,6 +170,29 @@ async function readR2(token, accountId, now) {
   };
 }
 
+// Alan planı ve açılış tarihine göre DNS kaydı kotası; belirlenemezse null (çağıran "Okunamadı" der).
+export function dnsQuotaOf(zone) {
+  const created = Date.parse(String(zone?.created_on || ""));
+  const plan = zone?.plan || {};
+  const free = plan.legacy_id === "free" || /^free\b/i.test(String(plan.name || ""));
+  if (!Number.isFinite(created) || !free) return null;
+  return created < Date.parse(CF_LIMITS.dnsCutoff) ? CF_LIMITS.dnsRecordsFreeLegacy : CF_LIMITS.dnsRecordsFree;
+}
+
+async function readDns(token, accountId, zoneName) {
+  const zones = await call(`${API}/zones?name=${encodeURIComponent(zoneName)}&account.id=${accountId}`, token);
+  const zone = Array.isArray(zones.result) ? zones.result.find(item => item?.name === zoneName) : null;
+  if (!zone?.id || !/^[0-9a-f]{32}$/i.test(String(zone.id))) throw new CfError(`${zoneName} alanı bulunamadı (Zone Read iznini denetleyin)`);
+  const limit = dnsQuotaOf(zone);
+  if (limit == null) {
+    throw new CfError(`DNS kotası belirlenemedi (plan: ${String(zone.plan?.name || "bilinmiyor").slice(0, 40)}, açılış: ${String(zone.created_on || "bilinmiyor").slice(0, 30)})`);
+  }
+  const records = await call(`${API}/zones/${zone.id}/dns_records?per_page=1`, token);
+  const total = records?.result_info?.total_count;
+  if (!Number.isInteger(total) || total < 0) throw new CfError("DNS kayıt sayısı yanıtta yok");
+  return { zone: zoneName, total, limit, pct: pct(total, limit), createdOn: zone.created_on, plan: String(zone.plan?.name || "") };
+}
+
 async function readTunnels(token, accountId) {
   let total = 0;
   let connected = 0;
@@ -193,27 +224,29 @@ async function settle(promise, token) {
   }
 }
 
-async function collect(token, accountId, now) {
-  const [workers, r2, tunnels] = await Promise.all([
+async function collect(token, accountId, zoneName, now) {
+  const [workers, r2, tunnels, dns] = await Promise.all([
     settle(readWorkers(token, accountId, now), token),
     settle(readR2(token, accountId, now), token),
     settle(readTunnels(token, accountId), token),
+    settle(readDns(token, accountId, zoneName), token),
   ]);
-  const parts = { workers, r2, tunnels };
+  const parts = { workers, r2, tunnels, dns };
   const failed = Object.entries(parts).filter(([, value]) => value.error).map(([name]) => name);
   for (const name of failed) console.error(`[cloudflare] ${name}: ${parts[name].error}`); // iletide belirteç yok (clean)
   const pcts = [];
   if (!workers.error) pcts.push(workers.pct);
   if (!r2.error) pcts.push(r2.storagePct, r2.classAPct, r2.classBPct);
   if (!tunnels.error) pcts.push(tunnels.pct);
+  if (!dns.error) pcts.push(dns.pct);
   const worst = pcts.length ? Math.max(...pcts) : 0;
   return {
-    status: failed.length === 3 ? "error" : failed.length ? "partial" : "connected",
+    status: failed.length === Object.keys(parts).length ? "error" : failed.length ? "partial" : "connected",
     level: levelOf(worst),
     worstPct: worst,
     checkedAt: now.toISOString(),
     limitsVerified: CF_LIMITS_VERIFIED,
-    workers, r2, tunnels,
+    workers, r2, tunnels, dns,
   };
 }
 
@@ -221,10 +254,12 @@ async function collect(token, accountId, now) {
 export async function cloudflareUsage({ refresh = false, now = () => new Date() } = {}) {
   const token = env("CF_ANALYTICS_TOKEN");
   const accountId = env("CF_ACCOUNT_ID");
+  const zoneName = (env("CF_ZONE_NAME") || "destekofis.net").toLowerCase();
   if (!token || !accountId) {
     return { status: "not_configured", limitsVerified: CF_LIMITS_VERIFIED, missing: [!accountId && "CF_ACCOUNT_ID", !token && "CF_ANALYTICS_TOKEN"].filter(Boolean) };
   }
   if (!/^[0-9a-f]{32}$/i.test(accountId)) return { status: "error", level: "ok", limitsVerified: CF_LIMITS_VERIFIED, error: "Okunamadı: CF_ACCOUNT_ID 32 karakterlik hesap kimliği değil" };
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(zoneName)) return { status: "error", level: "ok", limitsVerified: CF_LIMITS_VERIFIED, error: "Okunamadı: CF_ZONE_NAME geçerli bir alan adı değil" };
   const at = Date.now();
   if (cache) {
     const age = at - cache.at;
@@ -232,7 +267,7 @@ export async function cloudflareUsage({ refresh = false, now = () => new Date() 
     if (age < (refresh ? Math.min(ttl, REFRESH_MIN_MS) : ttl)) return { ...cache.data, cached: true };
   }
   if (!inflight) {
-    inflight = collect(token, accountId, now())
+    inflight = collect(token, accountId, zoneName, now())
       .catch(error => ({ status: "error", level: "ok", limitsVerified: CF_LIMITS_VERIFIED, error: `Okunamadı: ${clean(error?.message, token)}` }))
       .then(data => {
         cache = { at: Date.now(), data };

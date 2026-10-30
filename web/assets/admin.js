@@ -315,6 +315,10 @@
         ${meterHtml("R2 B Sınıfı İşlem (Bu Ay)", r.classB, r.classBLimit, r.classBPct, "okuma", "count")}`;
     const tunnels = t.error ? failed({ label: "Tünel Sayısı", error: t.error })
       : meterHtml("Tünel Sayısı", t.total, t.limit, t.pct, `şu an bağlı ${fmtInt(t.connected)}`, "count");
+    const d = cf.dns || { error: "Okunamadı: sunucu bu ölçüyü vermedi" };
+    const dnsLabel = `DNS Kayıtları (${d.zone || "destekofis.net"})`;
+    const dns = d.error ? failed({ label: dnsLabel, error: d.error })
+      : meterHtml(dnsLabel, d.total, d.limit, d.pct, "Her mobil ofis bir kayıt kullanır", "count");
     // Kısmi okumada seviye (okunan ölçülerden) yine gösterilir; kırmızı bir ölçü "Kısmen Okunamadı" arkasında kalmaz.
     const levelPill = `<span class="pill ${esc(cf.level)}">${esc(INFRA_LEVEL_TEXT[cf.level] || cf.level)}</span>`;
     const pill = cf.status === "partial" ? `<span class="pill-pair">${levelPill}<span class="pill warn">Kısmen Okunamadı</span></span>` : levelPill;
@@ -323,6 +327,7 @@
         ${workers}
         ${r2}
         ${tunnels}
+        ${dns}
         ${foot(cf.limitsVerified)}
       </article>`;
   }

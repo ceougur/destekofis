@@ -26,8 +26,10 @@ const calls = [];
 const ok = body => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 const fail = (status, message) => new Response(JSON.stringify({ success: false, errors: [{ code: 10000, message }] }), { status });
 
-function sceneOf({ workers = 1_000, storage = [], ops = [], tunnels = [], workersFail, r2Fail, tunnelsFail } = {}) {
-  return { workers, storage, ops, tunnels, workersFail, r2Fail, tunnelsFail };
+const ZONE_ID = "fedcba9876543210fedcba9876543210";
+const NEW_ZONE = { id: ZONE_ID, name: "destekofis.net", created_on: "2026-10-01T12:00:00.000Z", plan: { legacy_id: "free", name: "Free Website" } };
+function sceneOf({ workers = 1_000, storage = [], ops = [], tunnels = [], workersFail, r2Fail, tunnelsFail, zone = NEW_ZONE, dnsTotal = 12, zoneFail, dnsFail } = {}) {
+  return { workers, storage, ops, tunnels, workersFail, r2Fail, tunnelsFail, zone, dnsTotal, zoneFail, dnsFail };
 }
 
 globalThis.fetch = async (url, init = {}) => {
@@ -47,6 +49,15 @@ globalThis.fetch = async (url, init = {}) => {
     }
     if (scene.r2Fail) return scene.r2Fail();
     return ok({ data: { viewer: { accounts: [{ r2StorageAdaptiveGroups: scene.storage, r2OperationsAdaptiveGroups: scene.ops }] } }, errors: null });
+  }
+  if (href.includes("/zones?")) {
+    if (scene.zoneFail) return scene.zoneFail();
+    const name = new URL(href).searchParams.get("name");
+    return ok({ success: true, errors: [], result: scene.zone && scene.zone.name === name ? [scene.zone] : [], result_info: { total_count: scene.zone ? 1 : 0 } });
+  }
+  if (href.includes(`/zones/${ZONE_ID}/dns_records`)) {
+    if (scene.dnsFail) return scene.dnsFail();
+    return ok({ success: true, errors: [], result: [{ id: "r1", type: "CNAME" }], result_info: { page: 1, per_page: 1, count: 1, total_count: scene.dnsTotal } });
   }
   if (href.includes("/cfd_tunnel")) {
     if (scene.tunnelsFail) return scene.tunnelsFail();
@@ -76,6 +87,7 @@ const GB = 1024 ** 3;
 beforeEach(() => {
   process.env.CF_ANALYTICS_TOKEN = TOKEN;
   process.env.CF_ACCOUNT_ID = ACCOUNT;
+  delete process.env.CF_ZONE_NAME;
   cf.resetCloudflareCache();
   calls.length = 0;
   dbResult = INFRA;
@@ -180,13 +192,14 @@ test("API hatası: okunamayan bölüm 'Okunamadı' der ve sayı taşımaz; biri 
     workersFail: () => ok({ data: null, errors: [{ message: "not authorized for that account" }] }), // 200 + GraphQL hatası
     r2Fail: () => new Response("<html>bad gateway</html>", { status: 502 }),
     tunnelsFail: () => { throw new TypeError("fetch failed"); },
+    zoneFail: () => fail(403, "Unauthorized to access requested resource"),
   });
   ({ body } = await infra());
   assert.equal(body.cloudflare.status, "error");
   assert.match(body.cloudflare.workers.error, /^Okunamadı: Cloudflare: not authorized/);
   assert.match(body.cloudflare.r2.error, /^Okunamadı: Cloudflare HTTP 502/);
   assert.match(body.cloudflare.tunnels.error, /^Okunamadı: Cloudflare'e ulaşılamadı/);
-  for (const part of ["workers", "r2", "tunnels"]) assert.deepEqual(Object.keys(body.cloudflare[part]), ["error"], part);
+  for (const part of ["workers", "r2", "tunnels", "dns"]) assert.deepEqual(Object.keys(body.cloudflare[part]), ["error"], part);
 
   cf.resetCloudflareCache();
   scene = sceneOf({ workersFail: () => ok({ data: { viewer: { accounts: [] } } }) }); // yanlış hesap kimliği
@@ -264,7 +277,7 @@ test("oturum doğrulanmadan Cloudflare'e gidilmez; refresh veritabanına gitmez"
 test("önbellek: 10 dk içinde ikinci açılış Cloudflare'e gitmez; Yenile dakikada birden sık dış istek açmaz; hata kısa tutulur", async () => {
   await infra();
   const first = cfCalls().length;
-  assert.equal(first, 3, "3 istek: Worker, R2, tünel");
+  assert.equal(first, 5, "5 istek: Worker, R2, tünel, alan, DNS kayıtları");
   const again = await infra();
   assert.equal(cfCalls().length, first);
   assert.equal(again.body.cloudflare.cached, true);
@@ -291,10 +304,10 @@ test("önbellek: 10 dk içinde ikinci açılış Cloudflare'e gitmez; Yenile dak
     await infra();
     Date.now = () => realNow() + 61_000 + 10 * 60_000 + 30_000;
     await infra();
-    assert.equal(cfCalls().length, base + 3, "kısmi sonuç 1 dk içinde tekrar okunmamalı");
+    assert.equal(cfCalls().length, base + 5, "kısmi sonuç 1 dk içinde tekrar okunmamalı");
     Date.now = () => realNow() + 61_000 + 10 * 60_000 + 62_000;
     await infra();
-    assert.equal(cfCalls().length, base + 6, "kısmi sonuç 1 dk sonra yeniden okunmalı");
+    assert.equal(cfCalls().length, base + 10, "kısmi sonuç 1 dk sonra yeniden okunmalı");
   } finally {
     Date.now = realNow;
   }
@@ -302,5 +315,71 @@ test("önbellek: 10 dk içinde ikinci açılış Cloudflare'e gitmez; Yenile dak
 
 test("eşzamanlı iki açılış tek okuma yapar", async () => {
   await Promise.all([infra(), infra()]);
-  assert.equal(cfCalls().length, 3);
+  assert.equal(cfCalls().length, 5);
+});
+
+test("DNS kayıtları: kota alanın planı ve açılış tarihinden (Free: 01.09.2024 öncesi 1.000, sonrası 200); %70 / %90; kota varsayılmaz", async () => {
+  const quota = cf.dnsQuotaOf;
+  assert.equal(quota({ created_on: "2024-08-31T23:59:59Z", plan: { legacy_id: "free" } }), 1_000);
+  assert.equal(quota({ created_on: "2019-03-10T08:00:00Z", plan: { name: "Free Website" } }), 1_000);
+  assert.equal(quota({ created_on: "2024-09-01T00:00:00Z", plan: { legacy_id: "free" } }), 200);
+  assert.equal(quota({ created_on: "2026-10-01T12:00:00Z", plan: { name: "Free Website" } }), 200);
+  assert.equal(quota({ plan: { legacy_id: "free" } }), null, "açılış tarihi yoksa 200 varsayılmamalı");
+  assert.equal(quota({ created_on: "çok eski", plan: { legacy_id: "free" } }), null);
+  assert.equal(quota({ created_on: "2026-10-01T12:00:00Z", plan: { legacy_id: "pro", name: "Pro Website" } }), null, "Free dışı plan: kota bilinmiyor");
+
+  const cases = [
+    [{ dnsTotal: 12 }, 200, "ok"],
+    [{ dnsTotal: 139 }, 200, "ok"],
+    [{ dnsTotal: 140 }, 200, "warn"],
+    [{ dnsTotal: 170 }, 200, "warn"],
+    [{ dnsTotal: 181 }, 200, "bad"],
+    [{ dnsTotal: 181, zone: { ...NEW_ZONE, created_on: "2024-08-15T00:00:00Z" } }, 1_000, "ok"],
+    [{ dnsTotal: 950, zone: { ...NEW_ZONE, created_on: "2024-08-15T00:00:00Z" } }, 1_000, "bad"],
+  ];
+  for (const [extra, limit, level] of cases) {
+    cf.resetCloudflareCache();
+    scene = sceneOf(extra);
+    const { body } = await infra();
+    const name = JSON.stringify(extra);
+    assert.equal(body.cloudflare.status, "connected", name);
+    assert.equal(body.cloudflare.dns.zone, "destekofis.net", name);
+    assert.equal(body.cloudflare.dns.total, extra.dnsTotal, name);
+    assert.equal(body.cloudflare.dns.limit, limit, name);
+    assert.equal(body.cloudflare.level, level, name);
+  }
+  // Kayıt sayısı tek sayfa isteğinin total_count'undan; alan doğru kimlikle.
+  const dnsCall = cfCalls().find(call => call.href.includes("/dns_records"));
+  assert.ok(dnsCall.href.startsWith(`https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records?`));
+
+  // Okunamadı: kota ya da sayı belirlenemezse sayı (0 ya da 200) taşınmaz.
+  const unreadable = {
+    "alan yok": { zone: null },
+    "alan izni yok": { zoneFail: () => fail(403, "Unauthorized to access requested resource") },
+    "açılış tarihi yok": { zone: { ...NEW_ZONE, created_on: undefined } },
+    "ücretli plan": { zone: { ...NEW_ZONE, plan: { legacy_id: "pro", name: "Pro Website" } } },
+    "DNS izni yok": { dnsFail: () => fail(403, "Authentication error") },
+    "sayı yok": { dnsFail: () => ok({ success: true, errors: [], result: [], result_info: {} }) },
+  };
+  for (const [name, extra] of Object.entries(unreadable)) {
+    cf.resetCloudflareCache();
+    scene = sceneOf(extra);
+    const { body } = await infra();
+    assert.equal(body.cloudflare.status, "partial", name);
+    assert.match(body.cloudflare.dns.error, /^Okunamadı: /, name);
+    assert.deepEqual(Object.keys(body.cloudflare.dns), ["error"], `${name}: sayı/kota taşımamalı`);
+  }
+
+  // CF_ZONE_NAME başka alanı seçer; geçersiz ad okunmaz.
+  cf.resetCloudflareCache();
+  process.env.CF_ZONE_NAME = "ornek.com.tr";
+  scene = sceneOf({ zone: { ...NEW_ZONE, name: "ornek.com.tr" }, dnsTotal: 3 });
+  let { body } = await infra();
+  assert.equal(body.cloudflare.dns.zone, "ornek.com.tr");
+  assert.equal(body.cloudflare.dns.total, 3);
+  cf.resetCloudflareCache();
+  process.env.CF_ZONE_NAME = "ornek.com/../x";
+  ({ body } = await infra());
+  assert.equal(body.cloudflare.status, "error");
+  assert.match(body.cloudflare.error, /CF_ZONE_NAME/);
 });
