@@ -29,6 +29,14 @@
   const fmtDateTime = iso => (iso ? dateTimeFormat.format(new Date(iso)) : "—");
   const fmtInt = value => new Intl.NumberFormat("tr-TR").format(Math.round(Number(value) || 0));
   const fmtPct = value => new Intl.NumberFormat("tr-TR", { maximumFractionDigits: Number(value) < 1 ? 2 : 1 }).format(Number(value) || 0);
+  // Cloudflare kotaları ondalık birimle (1 GB = 10^9 bayt) faturalanır; R2 ölçüsü bu birimle gösterilir.
+  function fmtBytesDecimal(value) {
+    const n = Number(value) || 0;
+    if (n >= 1e9) return `${new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 }).format(n / 1e9)} GB`;
+    if (n >= 1e6) return `${new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 }).format(n / 1e6)} MB`;
+    if (n >= 1e3) return `${new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 }).format(n / 1e3)} KB`;
+    return `${fmtInt(n)} B`;
+  }
   function fmtBytes(value) {
     const n = Number(value) || 0;
     if (n >= 1073741824) return `${new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 }).format(n / 1073741824)} GB`;
@@ -244,7 +252,7 @@
   }
   function meterHtml(label, used, limit, pct, note, unit = "bytes") {
     const level = pct >= 90 ? "bad" : pct >= 70 ? "warn" : "ok";
-    const fmt = unit === "bytes" ? fmtBytes : fmtInt;
+    const fmt = unit === "bytes" ? fmtBytes : unit === "decimal-bytes" ? fmtBytesDecimal : fmtInt;
     return `<div class="meter ${level}">
       <div class="meter-head"><span>${esc(label)}</span><b>${esc(fmt(used))} / ${esc(fmt(limit))}</b></div>
       <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(100, Math.max(0, pct))}" aria-label="${esc(label)}"><i style="width:${Math.min(100, Math.max(0.4, pct))}%"></i></div>
@@ -302,7 +310,7 @@
     const workers = w.error ? failed({ label: "Worker İstekleri (Bugün)", error: w.error })
       : meterHtml("Worker İstekleri (Bugün)", w.requests, w.limit, w.pct, "günlük sınır", "count");
     const r2 = r.error ? failed({ label: "R2 Depolama ve İşlemler", error: r.error })
-      : `${meterHtml("R2 Depolama", r.storageBytes, r.storageLimitBytes, r.storagePct, `${fmtInt(r.buckets)} kova · ${fmtInt(r.objects)} nesne`)}
+      : `${meterHtml("R2 Depolama", r.storageBytes, r.storageLimitBytes, r.storagePct, `${fmtInt(r.buckets)} kova · ${fmtInt(r.objects)} nesne`, "decimal-bytes")}
         ${meterHtml("R2 A Sınıfı İşlem (Bu Ay)", r.classA, r.classALimit, r.classAPct, "yazma / listeleme", "count")}
         ${meterHtml("R2 B Sınıfı İşlem (Bu Ay)", r.classB, r.classBLimit, r.classBPct, "okuma", "count")}`;
     const tunnels = t.error ? failed({ label: "Tünel Sayısı", error: t.error })

@@ -13,18 +13,19 @@
 // Kaynaklar: GraphQL Analytics (workersInvocationsAdaptive; r2StorageAdaptiveGroups, r2OperationsAdaptiveGroups) ve
 // REST GET /accounts/{id}/cfd_tunnel. Sonuç 10 dakika önbelleklenir (Yenile en çok dakikada bir dış isteğe yol açar; hata 1 dk).
 //
-// KOTALAR (Cloudflare ücretsiz planı; bu ortamdan Cloudflare belgesine erişilemedi → DOĞRULANACAK, CF_LIMITS_VERIFIED=false):
-//   Workers 100.000 istek/gün (UTC 00:00'da sıfırlanır), R2 10 GB depolama, A sınıfı 1.000.000 / ay, B sınıfı 10.000.000 / ay,
+// KOTALAR (Cloudflare ücretsiz planı; resmî belgeden doğrulandı 30.10.2026: workers/platform/limits, r2/pricing,
+// cloudflare-one/account-limits → CF_LIMITS_VERIFIED=true):
+//   Workers 100.000 istek/gün (UTC 00:00'da sıfırlanır), R2 10 GB-ay Standard depolama (10^9 bayt), A sınıfı 1.000.000 / ay, B sınıfı 10.000.000 / ay,
 //   hesap başına 1.000 tünel.
 
 export const CF_LIMITS = Object.freeze({
   workerRequestsPerDay: 100_000,
-  r2StorageBytes: 10 * 1024 ** 3,
+  r2StorageBytes: 10 * 1000 ** 3, // "10 GB-month": Cloudflare faturası ondalık GB (10^9) kullanır
   r2ClassAPerMonth: 1_000_000,
   r2ClassBPerMonth: 10_000_000,
   tunnelsPerAccount: 1_000,
 });
-export const CF_LIMITS_VERIFIED = false;
+export const CF_LIMITS_VERIFIED = true;
 
 // R2 işlem sınıfları (Cloudflare R2 fiyatlandırma sayfasındaki adlar). Silme ve iptal işlemleri ücretsizdir, sayılmaz.
 const CLASS_A = new Set([
@@ -221,9 +222,9 @@ export async function cloudflareUsage({ refresh = false, now = () => new Date() 
   const token = env("CF_ANALYTICS_TOKEN");
   const accountId = env("CF_ACCOUNT_ID");
   if (!token || !accountId) {
-    return { status: "not_configured", missing: [!accountId && "CF_ACCOUNT_ID", !token && "CF_ANALYTICS_TOKEN"].filter(Boolean) };
+    return { status: "not_configured", limitsVerified: CF_LIMITS_VERIFIED, missing: [!accountId && "CF_ACCOUNT_ID", !token && "CF_ANALYTICS_TOKEN"].filter(Boolean) };
   }
-  if (!/^[0-9a-f]{32}$/i.test(accountId)) return { status: "error", level: "ok", error: "Okunamadı: CF_ACCOUNT_ID 32 karakterlik hesap kimliği değil" };
+  if (!/^[0-9a-f]{32}$/i.test(accountId)) return { status: "error", level: "ok", limitsVerified: CF_LIMITS_VERIFIED, error: "Okunamadı: CF_ACCOUNT_ID 32 karakterlik hesap kimliği değil" };
   const at = Date.now();
   if (cache) {
     const age = at - cache.at;
@@ -232,7 +233,7 @@ export async function cloudflareUsage({ refresh = false, now = () => new Date() 
   }
   if (!inflight) {
     inflight = collect(token, accountId, now())
-      .catch(error => ({ status: "error", level: "ok", error: `Okunamadı: ${clean(error?.message, token)}` }))
+      .catch(error => ({ status: "error", level: "ok", limitsVerified: CF_LIMITS_VERIFIED, error: `Okunamadı: ${clean(error?.message, token)}` }))
       .then(data => {
         cache = { at: Date.now(), data };
         inflight = null;

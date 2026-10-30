@@ -66,10 +66,10 @@ ve operatör merkezini otomatik olarak yeniden yayınlar. Alan adı alındığı
   önbelleklenir; **Yenile** ile tazelenir. Kotalar ve dönem başlangıç günü *Ayarlar → Altyapı kotaları*'ndan değiştirilir
   (`lisans.settings.infra_limits`; varsayılan Vercel Hobby 1.000.000 çağrı / 100 GB, Supabase Free 500 MB / 5 GB).
 - **Cloudflare (Mobil) kartı (2.4.8 C1):** Altyapı limitlerinin üçüncü kartı mobil kullanımın Cloudflare tarafını (kapıcı Worker'ı,
-  R2 özet deposu, ofis tünelleri) ücretsiz plan kotalarına oranlar: Worker istekleri (bugün, UTC; 100.000/gün), R2 depolama (10 GB),
+  R2 özet deposu, ofis tünelleri) ücretsiz plan kotalarına oranlar: Worker istekleri (bugün, UTC; 100.000/gün), R2 depolama (10 GB-ay, ondalık),
   R2 A sınıfı (1.000.000/ay) ve B sınıfı (10.000.000/ay) işlemler, tünel sayısı (hesap başına 1.000). Kota rakamları
-  `web/api/_lib/cloudflare.mjs` `CF_LIMITS`'tedir; Cloudflare belgesinden doğrulanana dek `CF_LIMITS_VERIFIED = false` ve kart
-  "doğrulanacak" der. Veri sunucu tarafında (operatör oturumu doğrulandıktan sonra) GraphQL Analytics (`workersInvocationsAdaptive`,
+  `web/api/_lib/cloudflare.mjs` `CF_LIMITS`'tedir (Cloudflare belgesinden doğrulandı 30.10.2026; R2 10 GB-ay = 10^9 bayt,
+  `CF_LIMITS_VERIFIED = true`; false yapılırsa kart "doğrulanacak" der). Veri sunucu tarafında (operatör oturumu doğrulandıktan sonra) GraphQL Analytics (`workersInvocationsAdaptive`,
   `r2StorageAdaptiveGroups`, `r2OperationsAdaptiveGroups`) ve `GET /accounts/{id}/cfd_tunnel` ile okunur; 10 dakika önbelleklenir
   (Yenile en çok dakikada bir, hata 1 dakika). Hesap geneli sayılır. Değişkenler yoksa kart "Bağlantı Kurulmadı"; okunamayan ölçü
   "Okunamadı" der (0 gösterilmez). Belirteç yanıta, hata iletisine ve günlüğe girmez. Cloudflare uyarıları hareketlere yazılmaz

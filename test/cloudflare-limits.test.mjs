@@ -123,7 +123,7 @@ test("normal: Worker, R2 (kova başına son ölçüm, A/B sınıfı) ve tünel s
   assert.equal(c.workers.requests, 1_234);
   assert.equal(c.workers.limit, 100_000);
   assert.equal(c.r2.storageBytes, 4 * GB + 1_000, "her kovanın EN SON ölçümü toplanmalı");
-  assert.equal(c.r2.storageLimitBytes, 10 * GB);
+  assert.equal(c.r2.storageLimitBytes, 10_000_000_000, "R2 kotası ondalık 10 GB (10^9 bayt; GiB değil)");
   assert.equal(c.r2.buckets, 2);
   assert.equal(c.r2.objects, 55);
   assert.equal(c.r2.classA, 1_500);
@@ -133,7 +133,7 @@ test("normal: Worker, R2 (kova başına son ölçüm, A/B sınıfı) ve tünel s
   assert.equal(c.tunnels.total, 4);
   assert.equal(c.tunnels.connected, 2);
   assert.equal(c.tunnels.limit, 1_000);
-  assert.equal(c.limitsVerified, false, "kota rakamları doğrulanana dek işaretli kalmalı");
+  assert.equal(c.limitsVerified, true, "kota rakamları resmî belgeden doğrulandı");
   // Sorgu bugünün UTC başından ve ayın başından okur; hesap kimliği değişkenle gider.
   const gql = cfCalls().filter(call => call.href.endsWith("/graphql"));
   assert.equal(gql.length, 2);
@@ -149,7 +149,10 @@ test("%70 sarı, %90 kırmızı (her ölçü kendi başına kartı yükseltir); 
     [{ workers: 69_999 }, "ok"],
     [{ workers: 70_000 }, "warn"],
     [{ workers: 90_000 }, "bad"],
-    [{ storage: [{ max: { payloadSize: 7 * GB, metadataSize: 0, objectCount: 1 }, dimensions: { bucketName: "b", datetime: "2026-10-30T00:00:00Z" } }] }, "warn"],
+    [{ storage: [{ max: { payloadSize: 7_000_000_000, metadataSize: 0, objectCount: 1 }, dimensions: { bucketName: "b", datetime: "2026-10-30T00:00:00Z" } }] }, "warn"],
+    // 6,6 GiB = 7,09·10^9 bayt: ondalık kotada %70 (sarı), GiB kotasında %66 (Normal) olurdu.
+    [{ storage: [{ max: { payloadSize: 6.6 * GB, metadataSize: 0, objectCount: 1 }, dimensions: { bucketName: "b", datetime: "2026-10-30T00:00:00Z" } }] }, "warn"],
+    [{ storage: [{ max: { payloadSize: 6_999_999_999, metadataSize: 0, objectCount: 1 }, dimensions: { bucketName: "b", datetime: "2026-10-30T00:00:00Z" } }] }, "ok"],
     [{ ops: [{ sum: { requests: 900_000 }, dimensions: { actionType: "PutObject" } }] }, "bad"],
     [{ ops: [{ sum: { requests: 7_500_000 }, dimensions: { actionType: "GetObject" } }] }, "warn"],
     [{ tunnels: Array.from({ length: 950 }, (_, i) => tunnel("healthy", i)) }, "bad"],
