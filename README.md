@@ -65,6 +65,15 @@ ve operatör merkezini otomatik olarak yeniden yayınlar. Alan adı alındığı
   resmî rakamlar Vercel ve Supabase panolarındaki *Usage* sayfalarındadır. Operatör merkezi kullanımı 10 dakika
   önbelleklenir; **Yenile** ile tazelenir. Kotalar ve dönem başlangıç günü *Ayarlar → Altyapı kotaları*'ndan değiştirilir
   (`lisans.settings.infra_limits`; varsayılan Vercel Hobby 1.000.000 çağrı / 100 GB, Supabase Free 500 MB / 5 GB).
+- **Cloudflare (Mobil) kartı (2.4.8 C1):** Altyapı limitlerinin üçüncü kartı mobil kullanımın Cloudflare tarafını (kapıcı Worker'ı,
+  R2 özet deposu, ofis tünelleri) ücretsiz plan kotalarına oranlar: Worker istekleri (bugün, UTC; 100.000/gün), R2 depolama (10 GB),
+  R2 A sınıfı (1.000.000/ay) ve B sınıfı (10.000.000/ay) işlemler, tünel sayısı (hesap başına 1.000). Kota rakamları
+  `web/api/_lib/cloudflare.mjs` `CF_LIMITS`'tedir; Cloudflare belgesinden doğrulanana dek `CF_LIMITS_VERIFIED = false` ve kart
+  "doğrulanacak" der. Veri sunucu tarafında (operatör oturumu doğrulandıktan sonra) GraphQL Analytics (`workersInvocationsAdaptive`,
+  `r2StorageAdaptiveGroups`, `r2OperationsAdaptiveGroups`) ve `GET /accounts/{id}/cfd_tunnel` ile okunur; 10 dakika önbelleklenir
+  (Yenile en çok dakikada bir, hata 1 dakika). Hesap geneli sayılır. Değişkenler yoksa kart "Bağlantı Kurulmadı"; okunamayan ölçü
+  "Okunamadı" der (0 gösterilmez). Belirteç yanıta, hata iletisine ve günlüğe girmez. Cloudflare uyarıları hareketlere yazılmaz
+  (yalnız kart ve üst çubuk rozeti). Test: `test/cloudflare-limits.test.mjs` (Cloudflare taklit; gerçek servise gidilmez).
 
 ### Veritabanı (Supabase `destekofis`)
 
@@ -89,6 +98,8 @@ noktalarıdır ve sır olmadan hiçbir şey döndürmez). Tablolarda RLS açıkt
 | `DESTEKOFIS_LICENSE_KEY` | gizli (Sensitive) | Lisans imza anahtarı (Ed25519, PEM) |
 | `DESTEKOFIS_LICENSE_KEY_ID` | düz | `destekofis-lisans-2026-1` |
 | `KAPI_LISANS_ANAHTARI` | gizli (Sensitive) | Mobil kapıcının `/v1/kapi/durum` anahtarı; kapıcının `wrangler secret`'ıyla aynı değer, en az 32 karakter (yoksa uç kapalı) |
+| `CF_ACCOUNT_ID` | düz | Cloudflare hesap kimliği (32 karakter); Cloudflare (Mobil) kartı için |
+| `CF_ANALYTICS_TOKEN` | gizli (Sensitive) | YALNIZ OKUMA belirteci (Account Analytics Read, Workers R2 Storage Read, Cloudflare Tunnel Read); kapıcının yazma yetkili `CF_API_TOKEN`'ı DEĞİL. Yoksa kart "Bağlantı Kurulmadı" |
 
 Gizli değerler depoya ve belgelere yazılmaz. Vercel'deki gizli değerler sonradan okunamaz; kaybolursa yenisi üretilir:
 

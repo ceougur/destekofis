@@ -38,6 +38,7 @@
   }
   const INFRA_METRIC = { "vercel.requests": "Vercel fonksiyon çağrısı", "vercel.transfer": "Vercel veri aktarımı", "supabase.db": "Supabase veritabanı boyutu", "supabase.egress": "Supabase egress" };
   const INFRA_LEVEL_TEXT = { ok: "Normal", warn: "%70'i aştı", bad: "%90'ı aştı" };
+  const INFRA_RANK = { ok: 0, warn: 1, bad: 2 };
   function ago(iso) {
     if (!iso) return "henüz bağlanmadı";
     const minutes = Math.round((Date.now() - Date.parse(iso)) / 60_000);
@@ -225,7 +226,7 @@
   // Bu çağrının kendisi tek bir veritabanı isteğidir ve 10 dakika önbelleklenir.
   async function loadInfra(force = false) {
     if (!force && state.infra && Date.now() - state.infra.at < 10 * 60_000) return state.infra.data;
-    const data = await api("infra");
+    const data = await api("infra", force ? { refresh: true } : {});
     state.infra = { at: Date.now(), data };
     paintInfraBadge(data);
     return data;
@@ -233,10 +234,12 @@
   function paintInfraBadge(data) {
     const badge = $("#infraBadge");
     if (!badge) return;
-    const level = data?.level || "ok";
+    const cf = data?.cloudflare;
+    const cfLevel = cf && (cf.status === "connected" || cf.status === "partial") ? cf.level : "ok";
+    const level = INFRA_RANK[cfLevel] > INFRA_RANK[data?.level || "ok"] ? cfLevel : data?.level || "ok";
     badge.hidden = level === "ok";
     badge.className = `infra-badge ${level}`;
-    const worst = Math.max(data?.vercel?.requestsPct || 0, data?.vercel?.transferPct || 0, data?.supabase?.dbPct || 0, data?.supabase?.egressPct || 0);
+    const worst = Math.max(data?.vercel?.requestsPct || 0, data?.vercel?.transferPct || 0, data?.supabase?.dbPct || 0, data?.supabase?.egressPct || 0, cfLevel === "ok" ? 0 : cf.worstPct || 0);
     badge.textContent = `Altyapı %${fmtPct(worst)}`;
   }
   function meterHtml(label, used, limit, pct, note, unit = "bytes") {
@@ -255,7 +258,7 @@
     const idleDays = data.lastRequestAt ? (Date.now() - new Date(data.lastRequestAt).getTime()) / 86400000 : null;
     const idleNote = idleDays != null && idleDays >= 5 ? `<div class="note warn">Programlardan ${Math.floor(idleDays)} gündür istek gelmedi. Supabase ücretsiz planda 7 gün istek almayan projeyi duraklatır; panodan uyandırmak gerekir.</div>` : "";
     const levelPill = level => `<span class="pill ${level}">${esc(INFRA_LEVEL_TEXT[level] || level)}</span>`;
-    return `<div class="infra-grid">
+    return `<div class="infra-grid three">
       <article class="infra-card ${esc(v.level)}" data-infra="vercel">
         <header><div><b>Vercel</b><small>Lisans servisi ve site · Hobby planı</small></div>${levelPill(v.level)}</header>
         ${meterHtml("Fonksiyon çağrısı (bu dönem)", v.requests, v.requestsLimit, v.requestsPct, `bugün ${fmtInt(v.todayRequests)}`, "count")}
@@ -268,9 +271,52 @@
         ${meterHtml("Egress (API yanıtları, bu dönem)", s.egressBytes, s.egressLimitBytes, s.egressPct, "yaklaşık")}
         <footer><small>Son program isteği: ${data.lastRequestAt ? esc(ago(data.lastRequestAt)) : "henüz yok"}. Resmî rakam: Supabase panosu › Usage.</small></footer>
       </article>
+      ${cloudflareCardHtml(data.cloudflare)}
     </div>
     ${idleNote}
-    <p class="muted infra-foot">Dönem ${esc(fmtDate(data.period.start))} – ${esc(fmtDate(data.period.end))} (${fmtInt(data.period.daysLeft)} gün kaldı). ${esc(since)}; sayım isteğin kendi işleminde yapılır, dış servise ek istek atılmaz. %70'te sarı, %90'da kırmızı uyarı verilir ve hareketlere yazılır. Kotalar <a href="#ayarlar">Ayarlar</a>'dan değiştirilir.</p>`;
+    <p class="muted infra-foot">Dönem ${esc(fmtDate(data.period.start))} – ${esc(fmtDate(data.period.end))} (${fmtInt(data.period.daysLeft)} gün kaldı). ${esc(since)}; Vercel ve Supabase sayımı isteğin kendi işleminde yapılır, dış servise ek istek atılmaz; Cloudflare kartı Cloudflare API'sinden salt okunur ve 10 dakika önbelleklenir. %70'te sarı, %90'da kırmızı uyarı verilir; Vercel ve Supabase uyarıları hareketlere de yazılır. Vercel ve Supabase kotaları <a href="#ayarlar">Ayarlar</a>'dan değiştirilir (Cloudflare kotaları ücretsiz planın sabit değerleridir).</p>`;
+  }
+  // 2.4.8 C1: Cloudflare (Mobil) kartı. Veri sunucuda Cloudflare API'sinden okunur (web/api/_lib/cloudflare.mjs); okunamayan satır "Okunamadı" der, 0 göstermez.
+  function cloudflareCardHtml(cf) {
+    const head = pill => `<header><div><b>Cloudflare (Mobil)</b><small>Mobil kapıcı, özet deposu ve ofis tünelleri · Ücretsiz plan</small></div>${pill}</header>`;
+    const foot = verified => `<footer><small>Hesap geneli sayılır (bütün Worker'lar ve kovalar). Worker sınırı UTC 00:00'da, R2 işlemleri ay başında sıfırlanır.${verified ? "" : " Kota rakamları Cloudflare belgesinden doğrulanacak."} Resmî rakam: Cloudflare panosu › Workers ve R2.</small></footer>`;
+    if (!cf || cf.status === "not_configured") {
+      const missing = (cf?.missing || ["CF_ACCOUNT_ID", "CF_ANALYTICS_TOKEN"]).map(name => `<code>${esc(name)}</code>`).join(" ve ");
+      return `<article class="infra-card" data-infra="cloudflare" data-cf-status="not_configured">
+        ${head('<span class="pill muted">Bağlantı Kurulmadı</span>')}
+        <p class="muted">Kullanım okunamıyor: Vercel'de ${missing} tanımlı değil. Cloudflare'de yalnız okuma yetkili bir API belirteci (Account Analytics, Workers R2 Storage ve Cloudflare Tunnel okuma) açıp Vercel › destek-ofis › Settings › Environment Variables'a girin, ardından yeniden yayımlayın.</p>
+        ${foot(cf?.limitsVerified)}
+      </article>`;
+    }
+    if (cf.status === "error") {
+      return `<article class="infra-card" data-infra="cloudflare" data-cf-status="error">
+        ${head('<span class="pill bad">Okunamadı</span>')}
+        <p class="form-error">${esc(cf.error || "Okunamadı")}</p>
+        ${foot(cf.limitsVerified)}
+      </article>`;
+    }
+    const failed = text => `<div class="meter unknown"><div class="meter-head"><span>${esc(text.label)}</span><b>Okunamadı</b></div><small>${esc(text.error)}</small></div>`;
+    const w = cf.workers;
+    const r = cf.r2;
+    const t = cf.tunnels;
+    const workers = w.error ? failed({ label: "Worker İstekleri (Bugün)", error: w.error })
+      : meterHtml("Worker İstekleri (Bugün)", w.requests, w.limit, w.pct, "günlük sınır", "count");
+    const r2 = r.error ? failed({ label: "R2 Depolama ve İşlemler", error: r.error })
+      : `${meterHtml("R2 Depolama", r.storageBytes, r.storageLimitBytes, r.storagePct, `${fmtInt(r.buckets)} kova · ${fmtInt(r.objects)} nesne`)}
+        ${meterHtml("R2 A Sınıfı İşlem (Bu Ay)", r.classA, r.classALimit, r.classAPct, "yazma / listeleme", "count")}
+        ${meterHtml("R2 B Sınıfı İşlem (Bu Ay)", r.classB, r.classBLimit, r.classBPct, "okuma", "count")}`;
+    const tunnels = t.error ? failed({ label: "Tünel Sayısı", error: t.error })
+      : meterHtml("Tünel Sayısı", t.total, t.limit, t.pct, `şu an bağlı ${fmtInt(t.connected)}`, "count");
+    // Kısmi okumada seviye (okunan ölçülerden) yine gösterilir; kırmızı bir ölçü "Kısmen Okunamadı" arkasında kalmaz.
+    const levelPill = `<span class="pill ${esc(cf.level)}">${esc(INFRA_LEVEL_TEXT[cf.level] || cf.level)}</span>`;
+    const pill = cf.status === "partial" ? `<span class="pill-pair">${levelPill}<span class="pill warn">Kısmen Okunamadı</span></span>` : levelPill;
+    return `<article class="infra-card ${esc(cf.level)}" data-infra="cloudflare" data-cf-status="${esc(cf.status)}">
+        ${head(pill)}
+        ${workers}
+        ${r2}
+        ${tunnels}
+        ${foot(cf.limitsVerified)}
+      </article>`;
   }
   async function renderInfra(section, force = false) {
     const box = $("[data-infra-body]", section);
@@ -603,7 +649,7 @@
         ${stat("kullananlar", "blocked", "Engelli", counts.blocked, "program salt okunur çalışıyor", counts.blocked ? "bad" : "")}
       </div>
       <section class="card" id="infraSection">
-        <div class="card-head"><h2>Altyapı limitleri</h2><span class="count-note">Vercel ve Supabase kotaları · canlı sayım · <button class="link-btn" type="button" data-act="infra-refresh">Yenile</button></span></div>
+        <div class="card-head"><h2>Altyapı limitleri</h2><span class="count-note">Vercel, Supabase ve Cloudflare kotaları · canlı sayım · <button class="link-btn" type="button" data-act="infra-refresh">Yenile</button></span></div>
         <div data-infra-body></div>
       </section>
       <section class="card">
