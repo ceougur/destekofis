@@ -2,6 +2,7 @@
 // Oturum veritabanında tutulur; tarayıcıda yalnızca HttpOnly çerezde rastgele belirteç durur. İstekler özel başlık
 // (x-destekofis: operator) ve aynı köken ister; çerez SameSite=Strict olduğundan başka sitelerden kullanılamaz.
 import { clientIp, json, licenseKey, readJson, rpc, settings } from "./_lib/core.mjs";
+import { cloudflareUsage } from "./_lib/cloudflare.mjs";
 import { encodeCode, signToken } from "./_lib/token.mjs";
 
 const COOKIE = "do_op";
@@ -51,11 +52,18 @@ export async function POST(request) {
     if (!ACTIONS.has(action)) return json({ ok: false, code: "BAD_ACTION", error: "Bilinmeyen işlem." }, 400);
     const session = readSession(request);
     if (!session) return json({ ok: false, code: "SESSION", error: "Oturumunuz kapandı. Lütfen yeniden giriş yapın." }, 401);
-    const result = await rpc("lisans_operator", { p_secret: apiSecret, p_session: session, p_action: action, p_args: args, p_ip: ip });
+    // "refresh" yalnız Cloudflare önbelleği içindir; veritabanına gitmez.
+    const { refresh, ...rest } = args;
+    const dbArgs = action === "infra" ? rest : args;
+    const result = await rpc("lisans_operator", { p_secret: apiSecret, p_session: session, p_action: action, p_args: dbArgs, p_ip: ip });
     const headers = action === "logout" || result.code === "SESSION" ? { "set-cookie": sessionCookie(request, "", 0) } : {};
     if (!result.ok) return failure(result, headers);
     if (action === "license_code") {
       return json({ ok: true, code: encodeCode(signToken(result.claims, licenseKey(), keyId)), license: result.license });
+    }
+    if (action === "infra") {
+      // Cloudflare (Mobil) kartı: oturum veritabanında doğrulandıktan SONRA, sunucu tarafında okunur (belirteç istemciye çıkmaz).
+      return json({ ...result, cloudflare: await cloudflareUsage({ refresh: refresh === true }) }, 200, headers);
     }
     return json(result, 200, headers);
   } catch (error) {
