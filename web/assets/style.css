@@ -362,6 +362,7 @@ ul { margin: 0; padding: 0; list-style: none; }
 .footer p { color: var(--faint); font-size: 14px; }
 .footer-support { color: var(--muted, var(--faint)); font-weight: 600; }
 .footer-support a { color: var(--primary); text-decoration: none; white-space: nowrap; }
+.footer-legal { display: inline-block; margin-top: 4px; font-size: 13px; }
 .footer nav { display: flex; gap: 20px; font-size: 14px; color: var(--muted); }
 .footer nav a:hover { color: var(--text); }
 
